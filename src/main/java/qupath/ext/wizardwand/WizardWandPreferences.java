@@ -140,7 +140,7 @@ public class WizardWandPreferences {
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.edgeStrengthProperty(), Double.class)
-                .name("Edge strength (0-1)")
+                .name("Edge strength")
                 .category(CATEGORY)
                 .description("Controls how many edges act as barriers (when edge-aware is on).\n\n"
                         + "Low values (0.1-0.3): Only the strongest edges block the selection. "
@@ -154,7 +154,7 @@ public class WizardWandPreferences {
         // --- Simplification ---
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.simplifyToleranceProperty(), Double.class)
-                .name("Simplify tolerance")
+                .name("Simplify")
                 .category(CATEGORY)
                 .description("Automatically reduces anchor points in the selection to improve performance.\n\n"
                         + "Low values (0.1-0.3): Minimal simplification. More precise boundaries but "
@@ -207,7 +207,7 @@ public class WizardWandPreferences {
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.scrollSensitivityStepProperty(), Double.class)
-                .name("Scroll step size")
+                .name("Scroll step")
                 .category(CATEGORY)
                 .description("How much each scroll wheel tick changes the sensitivity value.\n\n"
                         + "Small values (0.1): Fine-grained control, many ticks to change significantly.\n"

@@ -542,8 +542,10 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
                     }
                 }
 
-                // Always keep the seed pixel clear so flood fill can start
-                matMask.ptr(W / 2 + 1, W / 2 + 1).put((byte) 1);
+                // Always keep the seed pixel clear so flood fill can start.
+                // The seed must be 0 in the mask -- non-zero means "barrier" and
+                // floodFill will reject the seed entirely, filling nothing.
+                matMask.ptr(W / 2 + 1, W / 2 + 1).put((byte) 0);
                 // The circle already set seed area to 1, which is the initial fill marker
             }
         } finally {
