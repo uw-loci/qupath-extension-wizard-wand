@@ -87,6 +87,9 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
     private Mat matHsv = null;          // Reusable Mat for HSV mode (avoids corrupting shared mat)
     private Mat matEdge = null;         // Reusable Mat for dedicated edge capture (pyramid offset > 0)
     private final Mat emptyMat = new Mat(); // Reusable empty Mat for drawContours hierarchy arg
+    // Pre-computed disk template bytes to avoid any ambiguity with Mat.put(Scalar) / circle(FILLED)
+    private byte[] diskTemplate = null;
+    private int diskTemplateRadius = -1;
 
     // --- Drawing state ---
     private Point2D pLast = null;
@@ -285,14 +288,19 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
             if (radius == 0)
                 return null;
 
-            // Fill entire mask with barriers (1), then carve out the fillable disk
-            // area as 0s. This avoids the clipping-gap issue where a circle outline
-            // near the mask boundary would have missing pixels at the cardinal
-            // directions, allowing 8-connectivity flood fill to escape and fill
-            // the entire sampling window (producing large square selections).
-            matMask.put(Scalar.ONE);
-            opencv_imgproc.circle(matMask, seed, radius, Scalar.ZERO,
-                    opencv_imgproc.FILLED, opencv_imgproc.LINE_8, 0);
+            // Initialize the flood fill mask to a filled-disk pattern.
+            //
+            // We write the mask bytes directly rather than relying on
+            // Mat.put(Scalar) + opencv_imgproc.circle(FILLED). That combination
+            // was producing intermittent square selections (the whole sampling
+            // window filling) that strongly suggest either the Scalar fill or
+            // the filled-circle draw wasn't actually taking effect. Direct byte
+            // writing removes all ambiguity.
+            //
+            // Mask layout: everything = 1 (barrier), except pixels inside a disk
+            // centered at (W/2, W/2) with the current radius, which become 0
+            // (fillable). The disk center matches the `seed` used for flood fill.
+            writeDiskMask(radius);
 
             // --- Stage 4: Edge-Aware barriers (optional, applied to mask) ---
             // Mark strong edge pixels as barriers in the mask BEFORE flood fill.
@@ -385,6 +393,38 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
     /**
      * Stage 1: Capture the image region centered on (x, y) into the provided BufferedImage.
      */
+    /**
+     * Initialize the flood fill mask to a filled-disk pattern for the given radius.
+     * Outside the disk: 1 (barrier). Inside: 0 (fillable). The disk is centered at
+     * mask coordinates (W/2 + 1, W/2 + 1) -- i.e. the mask pixel that corresponds
+     * to image pixel (W/2, W/2), which is the flood fill seed.
+     * <p>
+     * Uses a cached byte[] template so we only rebuild when the radius changes.
+     * Writing bytes directly avoids any uncertainty around Mat.put(Scalar) and
+     * circle(FILLED) behavior in the JavaCPP binding.
+     */
+    private void writeDiskMask(int radius) {
+        int size = (W + 2) * (W + 2);
+        if (diskTemplate == null || diskTemplate.length != size || diskTemplateRadius != radius) {
+            diskTemplate = new byte[size];
+            int cx = W / 2 + 1; // seed in mask coords
+            int cy = W / 2 + 1;
+            long r2 = (long) radius * radius;
+            int stride = W + 2;
+            for (int y = 0; y < W + 2; y++) {
+                for (int x = 0; x < W + 2; x++) {
+                    int dx = x - cx;
+                    int dy = y - cy;
+                    diskTemplate[y * stride + x] = (dx * dx + dy * dy <= r2) ? (byte) 0 : (byte) 1;
+                }
+            }
+            diskTemplateRadius = radius;
+        }
+        java.nio.ByteBuffer buf = matMask.createBuffer();
+        buf.position(0);
+        buf.put(diskTemplate);
+    }
+
     private void captureRegion(QuPathViewer viewer, BufferedImage imgTemp, double x, double y, double downsample) {
         var regionStore = viewer.getImageRegionStore();
 
