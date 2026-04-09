@@ -67,6 +67,8 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
     // --- Reusable image buffers ---
     private final BufferedImage imgBGR = new BufferedImage(W, W, BufferedImage.TYPE_3BYTE_BGR);
     private final BufferedImage imgGray = new BufferedImage(W, W, BufferedImage.TYPE_BYTE_GRAY);
+    // Dedicated edge-capture buffer used when edge pyramid offset > 0
+    private final BufferedImage imgEdge = new BufferedImage(W, W, BufferedImage.TYPE_BYTE_GRAY);
 
     // --- Reusable OpenCV objects ---
     private Mat mat = null;
@@ -83,6 +85,7 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
     private final Size blurSize = new Size(31, 31);
     private Mat matLabThreshold = null; // Reusable Mat for LAB distance mode
     private Mat matHsv = null;          // Reusable Mat for HSV mode (avoids corrupting shared mat)
+    private Mat matEdge = null;         // Reusable Mat for dedicated edge capture (pyramid offset > 0)
     private final Mat emptyMat = new Mat(); // Reusable empty Mat for drawContours hierarchy arg
 
     // --- Drawing state ---
@@ -295,7 +298,7 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
             // Mark strong edge pixels as barriers in the mask BEFORE flood fill.
             // Non-zero mask pixels prevent floodFill from crossing them.
             if (WizardWandParameters.getEdgeAware()) {
-                applyEdgeBarriersToMask(matThreshold, nChannels);
+                applyEdgeBarriersToMask(matThreshold, nChannels, viewer, x, y, downsample);
             }
 
             int conn = WizardWandParameters.getConnectivity();
@@ -501,48 +504,135 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
      * Sobel gradient magnitude, threshold it, and set barrier pixels to 1
      * in the mask. The seed pixel is always kept clear so flood fill can start.
      * <p>
-     * Note: the mask is (W+2)x(W+2) with a 1-pixel offset from the image.
-     * Edge barriers are written at (col+1, row+1) to match the mask offset.
+     * Two modes controlled by preferences:
+     * <ul>
+     *   <li><b>edgePyramidOffset = 0</b>: edges computed on the fill patch itself
+     *       (existing behavior, zoom-coupled).</li>
+     *   <li><b>edgePyramidOffset &gt; 0</b>: second capture at a coarser pyramid
+     *       level, Sobel on that, then crop the central region corresponding to
+     *       the fill patch and resize back to WxW. Gives zoom-stable structural
+     *       edges that don't collapse into cellular texture at high zoom.</li>
+     * </ul>
+     * <p>
+     * Normalization modes:
+     * <ul>
+     *   <li>RELATIVE: threshold = (1 - edgeStr) * max(gradient) in the window.</li>
+     *   <li>ABSOLUTE: threshold = (1 - edgeStr) * 255 on a fixed-range gradient,
+     *       for consistent behavior across scenes and zooms.</li>
+     * </ul>
      */
-    private void applyEdgeBarriersToMask(Mat matThreshold, int nChannels) {
+    private void applyEdgeBarriersToMask(Mat matThreshold, int nChannels,
+                                          QuPathViewer viewer, double x, double y, double fillDs) {
         double edgeStr = WizardWandParameters.getEdgeStrength();
         if (edgeStr <= 0)
             return;
 
-        // Convert to grayscale for edge detection if multi-channel
-        Mat gray;
-        boolean needClose = false;
-        if (nChannels == 1) {
-            gray = matThreshold;
-        } else {
-            gray = new Mat();
-            opencv_imgproc.cvtColor(matThreshold, gray, opencv_imgproc.COLOR_BGR2GRAY);
-            needClose = true;
+        int offset = WizardWandParameters.getEdgePyramidOffset();
+        EdgeNormalizationMode mode = WizardWandParameters.getEdgeNormalizationMode();
+
+        // Clamp offset so the central cropped region after resize is at least 8x8
+        int maxOffsetForSize = 0;
+        while ((W >> (maxOffsetForSize + 1)) >= 8)
+            maxOffsetForSize++;
+        if (offset > maxOffsetForSize) {
+            logger.debug("Clamping edge pyramid offset from {} to {} (W={})",
+                    offset, maxOffsetForSize, W);
+            offset = maxOffsetForSize;
+        }
+
+        // Choose the source Mat for edge detection
+        Mat edgeSource = null;
+        boolean closeEdgeSource = false;
+
+        if (offset > 0 && viewer != null) {
+            // Capture a second patch at a coarser pyramid level
+            double rawEdgeDs = fillDs * (1 << offset);
+            double edgeDs = Math.max(1, Math.round(rawEdgeDs * 4)) / 4.0;
+
+            try {
+                captureRegion(viewer, imgEdge, x, y, edgeDs);
+
+                if (matEdge == null || matEdge.isNull() || matEdge.empty()
+                        || matEdge.channels() != 1 || matEdge.depth() != opencv_core.CV_8U) {
+                    if (matEdge != null)
+                        matEdge.close();
+                    matEdge = new Mat(W, W, CV_8UC1);
+                }
+                byte[] edgeBuffer = ((DataBufferByte) imgEdge.getRaster().getDataBuffer()).getData();
+                ByteBuffer mbuf = matEdge.createBuffer();
+                mbuf.put(edgeBuffer);
+                edgeSource = matEdge;
+            } catch (Exception ex) {
+                logger.debug("Edge capture at offset {} failed, falling back to fill patch: {}",
+                        offset, ex.getMessage());
+                offset = 0;
+                edgeSource = null;
+            }
+        }
+
+        // Fallback / offset==0: edge detection on the fill patch
+        if (edgeSource == null) {
+            if (nChannels == 1) {
+                edgeSource = matThreshold;
+            } else {
+                edgeSource = new Mat();
+                opencv_imgproc.cvtColor(matThreshold, edgeSource, opencv_imgproc.COLOR_BGR2GRAY);
+                closeEdgeSource = true;
+            }
         }
 
         try (Mat gradX = new Mat(); Mat gradY = new Mat(); Mat gradMag = new Mat(); Mat edgeMask = new Mat()) {
-            opencv_imgproc.Sobel(gray, gradX, CV_32F, 1, 0);
-            opencv_imgproc.Sobel(gray, gradY, CV_32F, 0, 1);
+            opencv_imgproc.Sobel(edgeSource, gradX, CV_32F, 1, 0);
+            opencv_imgproc.Sobel(edgeSource, gradY, CV_32F, 0, 1);
             opencv_core.magnitude(gradX, gradY, gradMag);
 
-            // Normalize gradient to 0-255
-            double[] minVal = new double[1];
-            double[] maxVal = new double[1];
-            opencv_core.minMaxLoc(gradMag, minVal, maxVal, null, null, null);
-            if (maxVal[0] > 0) {
-                // Threshold: pixels with gradient above (1 - edgeStrength) * max are barriers.
-                // Low edgeStrength (0.1) = only very strong edges block (high threshold)
-                // High edgeStrength (0.9) = even weak edges block (low threshold)
-                double gradThreshold = (1.0 - edgeStr) * maxVal[0];
-                opencv_imgproc.threshold(gradMag, edgeMask, gradThreshold, 1.0,
-                        opencv_imgproc.THRESH_BINARY);
-                edgeMask.convertTo(edgeMask, CV_8U);
+            double gradThreshold;
+            if (mode == EdgeNormalizationMode.ABSOLUTE) {
+                // Absolute threshold on 0-255 scale. Sobel on uint8 input can
+                // produce magnitudes up to ~360, but we clamp to 255 on convertTo.
+                gradThreshold = (1.0 - edgeStr) * 255.0;
+                gradMag.convertTo(gradMag, CV_8U);
+            } else {
+                // RELATIVE (default): threshold relative to the max in this window
+                double[] minVal = new double[1];
+                double[] maxVal = new double[1];
+                opencv_core.minMaxLoc(gradMag, minVal, maxVal, null, null, null);
+                if (maxVal[0] <= 0) {
+                    return; // No gradient -> no barriers
+                }
+                gradThreshold = (1.0 - edgeStr) * maxVal[0];
+            }
+
+            opencv_imgproc.threshold(gradMag, edgeMask, gradThreshold, 1.0,
+                    opencv_imgproc.THRESH_BINARY);
+            edgeMask.convertTo(edgeMask, CV_8U);
+
+            // When offset > 0: the edge mask was computed on a larger image-space
+            // region than the fill patch. Crop the central Wc x Wc region (which
+            // corresponds exactly to the fill patch in image space) and resize
+            // back to WxW using nearest-neighbor (it's a binary mask).
+            Mat finalMask = edgeMask;
+            Mat resizedMask = null;
+            try {
+                if (offset > 0) {
+                    int wc = W >> offset;
+                    if (wc < 1) wc = 1;
+                    int cropX = (W - wc) / 2;
+                    int cropY = (W - wc) / 2;
+                    try (var rect = new org.bytedeco.opencv.opencv_core.Rect(cropX, cropY, wc, wc);
+                         Mat cropped = new Mat(edgeMask, rect)) {
+                        resizedMask = new Mat();
+                        opencv_imgproc.resize(cropped, resizedMask, new Size(W, W),
+                                0, 0, opencv_imgproc.INTER_NEAREST);
+                        finalMask = resizedMask;
+                    }
+                }
 
                 // Write edge barriers into the flood fill mask at offset (1,1)
-                // matMask is (W+2)x(W+2), edgeMask is WxW
+                // matMask is (W+2)x(W+2), finalMask is WxW
                 for (int row = 0; row < W; row++) {
                     for (int col = 0; col < W; col++) {
-                        if (edgeMask.ptr(row, col).get() != 0) {
+                        if (finalMask.ptr(row, col).get() != 0) {
                             matMask.ptr(row + 1, col + 1).put((byte) 1);
                         }
                     }
@@ -552,11 +642,13 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
                 // The seed must be 0 in the mask -- non-zero means "barrier" and
                 // floodFill will reject the seed entirely, filling nothing.
                 matMask.ptr(W / 2 + 1, W / 2 + 1).put((byte) 0);
-                // The circle already set seed area to 1, which is the initial fill marker
+            } finally {
+                if (resizedMask != null)
+                    resizedMask.close();
             }
         } finally {
-            if (needClose)
-                gray.close();
+            if (closeEdgeSource && edgeSource != null)
+                edgeSource.close();
         }
     }
 

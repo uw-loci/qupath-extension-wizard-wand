@@ -151,6 +151,37 @@ public class WizardWandPreferences {
                         + "selection to follow them closely.")
                 .build());
 
+        items.add(new PropertyItemBuilder<>(WizardWandParameters.edgePyramidOffsetProperty(), Integer.class)
+                .name("Edge pyramid offset")
+                .category(CATEGORY)
+                .description("How many pyramid levels COARSER than the current view to run "
+                        + "edge detection. Makes edges behave consistently across zoom levels.\n\n"
+                        + "0 (default): Same level as view. Edges reflect whatever is visible, "
+                        + "which means small cellular features become barriers when zoomed in.\n"
+                        + "1: One level coarser (2x downsample). Probes slightly broader features.\n"
+                        + "2-3: Two to three levels coarser. Picks up major tissue boundaries "
+                        + "regardless of current zoom. Good for ignoring cellular texture and "
+                        + "selecting based on broad tissue structures.\n"
+                        + "4: Maximum. Very coarse structural edges only.\n\n"
+                        + "Higher offsets give more stable, structural barriers. When you zoom "
+                        + "in, the same tissue contours still act as walls instead of being "
+                        + "replaced by noisy cellular edges.")
+                .build());
+
+        items.add(new PropertyItemBuilder<>(WizardWandParameters.edgeNormalizationModeProperty(),
+                        EdgeNormalizationMode.class)
+                .name("Edge normalization")
+                .category(CATEGORY)
+                .description("How the edge strength threshold is computed.\n\n"
+                        + "RELATIVE (default): Threshold is a fraction of the maximum gradient "
+                        + "in the current window. Barriers appear in every scene but shift as "
+                        + "you move the cursor or zoom.\n\n"
+                        + "ABSOLUTE: Threshold is a fixed fraction of 255. The same 'Edge "
+                        + "strength' value produces consistent barriers across different scenes. "
+                        + "Regions with only faint gradients may get few or no barriers. "
+                        + "Recommended when combined with Edge pyramid offset > 0.")
+                .build());
+
         // --- Simplification ---
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.simplifyToleranceProperty(), Double.class)

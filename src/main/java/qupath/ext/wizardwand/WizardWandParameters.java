@@ -51,6 +51,20 @@ public class WizardWandParameters {
     private static final DoubleProperty edgeStrength =
             PathPrefs.createPersistentPreference("wizardWandEdgeStrength", 0.5);
 
+    // How many pyramid levels coarser to run edge detection. 0 = same level as
+    // the view (current behavior), 1 = 2x coarser, 2 = 4x coarser, etc.
+    // Higher values give more stable, structural edges that don't collapse into
+    // cellular texture when the user zooms in.
+    private static final IntegerProperty edgePyramidOffset =
+            PathPrefs.createPersistentPreference("wizardWandEdgePyramidOffset", 0);
+
+    // How edge barriers are thresholded. RELATIVE (default, backward-compatible)
+    // uses (1 - edgeStrength) * maxGradient. ABSOLUTE uses (1 - edgeStrength) * 255
+    // on a fixed-range gradient, so the slider value is zoom/content-stable.
+    private static final ObjectProperty<EdgeNormalizationMode> edgeNormalizationMode =
+            PathPrefs.createPersistentPreference("wizardWandEdgeNormalizationMode",
+                    EdgeNormalizationMode.RELATIVE, EdgeNormalizationMode.class);
+
     private static final DoubleProperty simplifyTolerance =
             PathPrefs.createPersistentPreference("wizardWandSimplifyTolerance", 0.5);
 
@@ -118,6 +132,18 @@ public class WizardWandParameters {
 
     public static DoubleProperty edgeStrengthProperty() { return edgeStrength; }
     public static double getEdgeStrength() { return edgeStrength.get(); }
+
+    public static IntegerProperty edgePyramidOffsetProperty() { return edgePyramidOffset; }
+    public static int getEdgePyramidOffset() {
+        return Math.max(0, Math.min(4, edgePyramidOffset.get()));
+    }
+
+    public static ObjectProperty<EdgeNormalizationMode> edgeNormalizationModeProperty() {
+        return edgeNormalizationMode;
+    }
+    public static EdgeNormalizationMode getEdgeNormalizationMode() {
+        return edgeNormalizationMode.get();
+    }
 
     public static DoubleProperty simplifyToleranceProperty() { return simplifyTolerance; }
     public static double getSimplifyTolerance() { return simplifyTolerance.get(); }
@@ -201,6 +227,8 @@ public class WizardWandParameters {
         minHoleSize.set(100);
         edgeAware.set(false);
         edgeStrength.set(0.5);
+        edgePyramidOffset.set(0);
+        edgeNormalizationMode.set(EdgeNormalizationMode.RELATIVE);
         simplifyTolerance.set(0.5);
         aggressiveSimplifyTolerance.set(3.0);
         dwellDelay.set(300.0);
