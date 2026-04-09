@@ -9,7 +9,6 @@ import org.bytedeco.opencv.global.opencv_core;
 import org.bytedeco.opencv.global.opencv_imgproc;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.fx.prefs.controlsfx.PropertySheetUtils;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.extensions.QuPathExtension;
@@ -101,10 +100,7 @@ public class WizardWandExtension implements QuPathExtension {
             Platform.runLater(() -> installPreferences(qupath));
             return;
         }
-        qupath.getPreferencePane()
-                .getPropertySheet()
-                .getItems()
-                .addAll(PropertySheetUtils.parseAnnotatedItems(new WizardWandPreferences()));
+        WizardWandPreferences.installPreferences(qupath);
     }
 
     /**
