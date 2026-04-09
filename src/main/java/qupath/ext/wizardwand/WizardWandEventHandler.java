@@ -399,30 +399,36 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
      * mask coordinates (W/2 + 1, W/2 + 1) -- i.e. the mask pixel that corresponds
      * to image pixel (W/2, W/2), which is the flood fill seed.
      * <p>
-     * Uses a cached byte[] template so we only rebuild when the radius changes.
-     * Writing bytes directly avoids any uncertainty around Mat.put(Scalar) and
-     * circle(FILLED) behavior in the JavaCPP binding.
+     * Writes the mask ROW BY ROW using Mat.ptr(row).put(byte[]) so that the Mat's
+     * actual step (which may include alignment padding beyond cols * elemSize) is
+     * respected. A previous version wrote the template linearly via createBuffer(),
+     * which silently corrupted the mask when step > cols and left it with no
+     * barriers -- causing flood fill to escape and produce square selections.
+     * <p>
+     * The per-row template and the full row array are cached and only rebuilt
+     * when the radius changes.
      */
     private void writeDiskMask(int radius) {
-        int size = (W + 2) * (W + 2);
-        if (diskTemplate == null || diskTemplate.length != size || diskTemplateRadius != radius) {
-            diskTemplate = new byte[size];
+        int width = W + 2;
+        if (diskTemplate == null || diskTemplate.length != width * width
+                || diskTemplateRadius != radius) {
+            diskTemplate = new byte[width * width];
             int cx = W / 2 + 1; // seed in mask coords
             int cy = W / 2 + 1;
             long r2 = (long) radius * radius;
-            int stride = W + 2;
-            for (int y = 0; y < W + 2; y++) {
-                for (int x = 0; x < W + 2; x++) {
+            for (int y = 0; y < width; y++) {
+                for (int x = 0; x < width; x++) {
                     int dx = x - cx;
                     int dy = y - cy;
-                    diskTemplate[y * stride + x] = (dx * dx + dy * dy <= r2) ? (byte) 0 : (byte) 1;
+                    diskTemplate[y * width + x] = (dx * dx + dy * dy <= r2) ? (byte) 0 : (byte) 1;
                 }
             }
             diskTemplateRadius = radius;
         }
-        java.nio.ByteBuffer buf = matMask.createBuffer();
-        buf.position(0);
-        buf.put(diskTemplate);
+        // Write row by row, using Mat.ptr(row) so the Mat's row stride is honored
+        for (int y = 0; y < width; y++) {
+            matMask.ptr(y).put(diskTemplate, y * width, width);
+        }
     }
 
     private void captureRegion(QuPathViewer viewer, BufferedImage imgTemp, double x, double y, double downsample) {
