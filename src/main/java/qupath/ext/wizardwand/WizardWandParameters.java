@@ -19,8 +19,10 @@ public class WizardWandParameters {
     private static final ObjectProperty<WizardWandType> wandType =
             PathPrefs.createPersistentPreference("wizardWandType", WizardWandType.RGB, WizardWandType.class);
 
+    // Key changed from "wizardWandSensitivity" to force new default after formula change
+    // (old formula: threshold = stddev/sensitivity; new formula: threshold = stddev*sensitivity)
     private static final DoubleProperty sensitivity =
-            PathPrefs.createPersistentPreference("wizardWandSensitivity", 2.0);
+            PathPrefs.createPersistentPreference("wizardWandSensitivityV2", 0.5);
 
     private static final DoubleProperty sigma =
             PathPrefs.createPersistentPreference("wizardWandSigma", 4.0);
@@ -61,16 +63,16 @@ public class WizardWandParameters {
             PathPrefs.createPersistentPreference("wizardWandDwellExpansionRate", 0.5);
 
     private static final DoubleProperty dwellMaxBoost =
-            PathPrefs.createPersistentPreference("wizardWandDwellMaxBoost", 10.0);
+            PathPrefs.createPersistentPreference("wizardWandDwellMaxBoostV2", 3.0);
 
     private static final DoubleProperty scrollSensitivityStep =
-            PathPrefs.createPersistentPreference("wizardWandScrollSensitivityStep", 0.25);
+            PathPrefs.createPersistentPreference("wizardWandScrollSensitivityStepV2", 0.05);
 
     private static final DoubleProperty sensitivityMin =
-            PathPrefs.createPersistentPreference("wizardWandSensitivityMin", 0.25);
+            PathPrefs.createPersistentPreference("wizardWandSensitivityMinV2", 0.05);
 
     private static final DoubleProperty sensitivityMax =
-            PathPrefs.createPersistentPreference("wizardWandSensitivityMax", 15.0);
+            PathPrefs.createPersistentPreference("wizardWandSensitivityMaxV2", 5.0);
 
     // --- Transient state (reset per drawing operation, not persisted) ---
 

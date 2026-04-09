@@ -106,9 +106,14 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
     }
 
     /**
-     * Stop dwell expansion timer. Called by WizardWandPathTool on deregister.
+     * Reset all drawing state. Called by WizardWandPathTool on deregister
+     * to ensure clean state if the user switches tools mid-draw.
      */
-    public void stopDwell() {
+    public void resetDrawingState() {
+        drawing = false;
+        forceRefresh = false;
+        lastMouseEvent = null;
+        pLast = null;
         dwellTimer.stopDwell();
     }
 
@@ -272,10 +277,6 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
             }
 
             // --- Stage 4: Edge-Aware Mode (optional) ---
-            if (WizardWandParameters.getEdgeAware()) {
-                applyEdgeBarrier(matThreshold, nChannels);
-            }
-
             // --- Stage 5: Flood Fill ---
             int radius = (int) Math.round(W / 2.0 * QuPathPenManager.getPenManager().getPressure());
             if (radius == 0)
@@ -283,6 +284,13 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
 
             matMask.put(Scalar.ZERO);
             opencv_imgproc.circle(matMask, seed, radius, Scalar.ONE);
+
+            // --- Stage 4: Edge-Aware barriers (optional, applied to mask) ---
+            // Mark strong edge pixels as barriers in the mask BEFORE flood fill.
+            // Non-zero mask pixels prevent floodFill from crossing them.
+            if (WizardWandParameters.getEdgeAware()) {
+                applyEdgeBarriersToMask(matThreshold, nChannels);
+            }
 
             int conn = WizardWandParameters.getConnectivity();
             opencv_imgproc.floodFill(matThreshold, matMask, seed, Scalar.ONE, null,
@@ -461,13 +469,18 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
 
     /**
      * Stage 2: Compute threshold from standard deviation (for RGB, GRAY, HSV modes).
+     * <p>
+     * Higher sensitivity = larger threshold = bigger selection (consistent with LAB mode).
+     * Note: the original QuPath wand uses 1/sensitivity here, which inverts the
+     * relationship. We use sensitivity directly so that dwell expansion, scroll wheel,
+     * and presets all work intuitively (higher = larger selection across ALL modes).
      */
     private void computeStdDevThreshold(Mat matThreshold, int nChannels, double effectiveSensitivity) {
         meanStdDev(matThreshold, mean, stddev);
         DoubleBuffer stddevBuffer = stddev.createBuffer();
         double[] stddev2 = new double[nChannels];
         stddevBuffer.get(stddev2);
-        double scale = 1.0 / effectiveSensitivity;
+        double scale = effectiveSensitivity;
         if (scale < 0)
             scale = 0.01;
         for (int i = 0; i < stddev2.length; i++)
@@ -476,10 +489,16 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
     }
 
     /**
-     * Stage 4: Apply edge barrier to suppress flood fill across strong gradients.
-     * Computes Sobel gradient magnitude and adds it as an intensity penalty.
+     * Stage 4: Mark strong edge pixels as barriers in the flood fill mask.
+     * <p>
+     * Non-zero pixels in matMask act as barriers for floodFill. We compute
+     * Sobel gradient magnitude, threshold it, and set barrier pixels to 1
+     * in the mask. The seed pixel is always kept clear so flood fill can start.
+     * <p>
+     * Note: the mask is (W+2)x(W+2) with a 1-pixel offset from the image.
+     * Edge barriers are written at (col+1, row+1) to match the mask offset.
      */
-    private void applyEdgeBarrier(Mat matThreshold, int nChannels) {
+    private void applyEdgeBarriersToMask(Mat matThreshold, int nChannels) {
         double edgeStr = WizardWandParameters.getEdgeStrength();
         if (edgeStr <= 0)
             return;
@@ -495,35 +514,37 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
             needClose = true;
         }
 
-        // Compute Sobel gradient magnitude
-        try (Mat gradX = new Mat(); Mat gradY = new Mat(); Mat gradMag = new Mat()) {
+        try (Mat gradX = new Mat(); Mat gradY = new Mat(); Mat gradMag = new Mat(); Mat edgeMask = new Mat()) {
             opencv_imgproc.Sobel(gray, gradX, CV_32F, 1, 0);
             opencv_imgproc.Sobel(gray, gradY, CV_32F, 0, 1);
             opencv_core.magnitude(gradX, gradY, gradMag);
 
-            // Normalize to 0-255
+            // Normalize gradient to 0-255
             double[] minVal = new double[1];
             double[] maxVal = new double[1];
             opencv_core.minMaxLoc(gradMag, minVal, maxVal, null, null, null);
             if (maxVal[0] > 0) {
-                gradMag.convertTo(gradMag, CV_8U, 255.0 * edgeStr / maxVal[0], 0);
+                // Threshold: pixels with gradient above (1 - edgeStrength) * max are barriers.
+                // Low edgeStrength (0.1) = only very strong edges block (high threshold)
+                // High edgeStrength (0.9) = even weak edges block (low threshold)
+                double gradThreshold = (1.0 - edgeStr) * maxVal[0];
+                opencv_imgproc.threshold(gradMag, edgeMask, gradThreshold, 1.0,
+                        opencv_imgproc.THRESH_BINARY);
+                edgeMask.convertTo(edgeMask, CV_8U);
 
-                // Add gradient as intensity penalty to each channel
-                // This creates artificial barriers at strong edges
-                if (nChannels == 1) {
-                    opencv_core.add(matThreshold, gradMag, matThreshold);
-                } else {
-                    // Add to each channel individually
-                    try (Mat gradMag3 = new Mat()) {
-                        MatVector channels = new MatVector(3);
-                        channels.put(0, gradMag);
-                        channels.put(1, gradMag);
-                        channels.put(2, gradMag);
-                        opencv_core.merge(channels, gradMag3);
-                        opencv_core.add(matThreshold, gradMag3, matThreshold);
-                        channels.close();
+                // Write edge barriers into the flood fill mask at offset (1,1)
+                // matMask is (W+2)x(W+2), edgeMask is WxW
+                for (int row = 0; row < W; row++) {
+                    for (int col = 0; col < W; col++) {
+                        if (edgeMask.ptr(row, col).get() != 0) {
+                            matMask.ptr(row + 1, col + 1).put((byte) 1);
+                        }
                     }
                 }
+
+                // Always keep the seed pixel clear so flood fill can start
+                matMask.ptr(W / 2 + 1, W / 2 + 1).put((byte) 1);
+                // The circle already set seed area to 1, which is the initial fill marker
             }
         } finally {
             if (needClose)

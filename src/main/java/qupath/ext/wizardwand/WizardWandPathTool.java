@@ -66,8 +66,8 @@ public class WizardWandPathTool implements PathTool {
             Node canvas = viewer.getView();
             canvas.removeEventHandler(MouseEvent.ANY, mouseHandler);
             canvas.removeEventFilter(ScrollEvent.SCROLL, scrollHandler);
-            // Stop any active dwell timer
-            mouseHandler.stopDwell();
+            // Reset all drawing state (dwell timer, flags, stale events)
+            mouseHandler.resetDrawingState();
         }
     }
 
