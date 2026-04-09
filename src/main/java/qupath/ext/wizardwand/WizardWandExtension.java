@@ -89,7 +89,7 @@ public class WizardWandExtension implements QuPathExtension {
                         keyCombination.getDisplayText()
                 ));
                 // Attach context menu to the toolbar button when it becomes available
-                attachContextMenuToToolbarButton(icon);
+                attachContextMenuToToolbarButton(qupath);
             });
         }, "wizard-wand-init");
         t.setDaemon(true);
@@ -126,34 +126,78 @@ public class WizardWandExtension implements QuPathExtension {
     /**
      * Attach a context menu to the Wizard Wand's toolbar button.
      * <p>
-     * The icon Node is passed as the graphic of the ToggleButton created by
-     * QuPath's toolbar. We watch the icon's parent property to detect when
-     * it's added to the button, then walk up the parent chain to find the
-     * ToggleButton and set its context menu.
+     * Uses delayed Platform.runLater to wait for the toolbar to process the
+     * newly-installed tool, then iterates toolbar items to find the button
+     * whose tooltip matches "Wizard Wand".
      */
-    private void attachContextMenuToToolbarButton(Node icon) {
-        // If already in the scene, attach immediately
-        if (icon.getParent() != null) {
-            walkUpAndAttach(icon);
-            return;
-        }
-        // Otherwise, wait for the icon to be added to the scene
-        icon.parentProperty().addListener((obs, oldParent, newParent) -> {
-            if (newParent != null) {
-                walkUpAndAttach(icon);
-            }
-        });
+    private void attachContextMenuToToolbarButton(QuPathGUI qupath) {
+        // Double runLater: first lets the toolbar process the new tool,
+        // second runs after button creation
+        Platform.runLater(() -> Platform.runLater(() -> tryAttachContextMenu(qupath, 0)));
     }
 
-    private void walkUpAndAttach(Node icon) {
-        javafx.scene.Parent p = icon.getParent();
-        while (p != null && !(p instanceof javafx.scene.control.ButtonBase)) {
-            p = p.getParent();
+    private void tryAttachContextMenu(QuPathGUI qupath, int attempt) {
+        var toolBar = qupath.getToolBar();
+        if (toolBar == null) {
+            logger.warn("Wizard Wand: could not get toolbar for context menu");
+            return;
         }
-        if (p instanceof javafx.scene.control.ButtonBase button) {
+
+        var button = findWizardWandButton(toolBar);
+        if (button != null) {
             button.setContextMenu(buildContextMenu());
-            logger.debug("Wizard Wand context menu attached to toolbar button");
+            logger.info("Wizard Wand context menu attached to toolbar button");
+            return;
         }
+
+        // Not found yet - retry a few times in case toolbar is still being built
+        if (attempt < 10) {
+            Platform.runLater(() -> tryAttachContextMenu(qupath, attempt + 1));
+        } else {
+            logger.warn("Wizard Wand: could not find toolbar button after {} attempts", attempt);
+        }
+    }
+
+    /**
+     * Find the Wizard Wand button in the toolbar by checking tooltip text
+     * and action properties.
+     */
+    private javafx.scene.control.ButtonBase findWizardWandButton(javafx.scene.control.ToolBar toolBar) {
+        for (var item : toolBar.getItems()) {
+            var button = findButton(item);
+            if (button == null)
+                continue;
+            // Check tooltip
+            var tooltip = button.getTooltip();
+            if (tooltip != null && tooltip.getText() != null
+                    && tooltip.getText().contains("Wizard Wand")) {
+                return button;
+            }
+            // Check text
+            if ("Wizard Wand".equals(button.getText())) {
+                return button;
+            }
+            // Check ControlsFX action stored in properties
+            var action = button.getProperties().get("controlsfx.actions.action");
+            if (action instanceof org.controlsfx.control.action.Action a
+                    && "Wizard Wand".equals(a.getText())) {
+                return button;
+            }
+        }
+        return null;
+    }
+
+    private javafx.scene.control.ButtonBase findButton(javafx.scene.Node node) {
+        if (node instanceof javafx.scene.control.ButtonBase b)
+            return b;
+        if (node instanceof javafx.scene.Parent p) {
+            for (var child : p.getChildrenUnmodifiable()) {
+                var found = findButton(child);
+                if (found != null)
+                    return found;
+            }
+        }
+        return null;
     }
 
     /**
