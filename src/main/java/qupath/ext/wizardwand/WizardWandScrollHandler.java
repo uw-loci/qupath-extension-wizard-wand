@@ -32,8 +32,9 @@ public class WizardWandScrollHandler implements EventHandler<ScrollEvent> {
         // Consume to prevent zoom while drawing
         e.consume();
 
-        // Scroll up (positive deltaY) = increase sensitivity = larger selection
-        // Scroll down (negative deltaY) = decrease sensitivity = smaller selection
+        // Scroll up (positive deltaY) = increase sensitivity value = tighter selection (RGB/GRAY/HSV)
+        // Scroll down (negative deltaY) = decrease sensitivity value = looser selection (RGB/GRAY/HSV)
+        // Note: for LAB_DISTANCE mode the relationship is reversed
         double direction = e.getDeltaY() > 0 ? 1.0 : -1.0;
         WizardWandParameters.adjustSensitivity(direction);
 

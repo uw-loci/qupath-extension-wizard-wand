@@ -46,12 +46,16 @@ public class WizardWandPreferences {
         items.add(new PropertyItemBuilder<>(WizardWandParameters.sensitivityProperty(), Double.class)
                 .name("Sensitivity")
                 .category(CATEGORY)
-                .description("Controls how aggressively the wand expands from the click point.\n\n"
-                        + "Low values (0.5-1.5): Tight, precise selections. Use when tissue boundaries "
-                        + "are well-defined and you want to avoid selecting neighboring structures.\n"
-                        + "Medium values (2.0-4.0): Balanced selection. Good for most annotation tasks.\n"
-                        + "High values (5.0+): Expansive selection. Use for quickly annotating large, "
-                        + "uniform regions like stroma or background.\n\n"
+                .description("Controls the flood fill threshold relative to local pixel variation.\n\n"
+                        + "For RGB/GRAY/HSV modes: the threshold is stddev / sensitivity. "
+                        + "Higher values produce SMALLER, more precise selections.\n"
+                        + "For LAB_DISTANCE mode: the threshold is mean_distance * sensitivity. "
+                        + "Higher values produce LARGER selections.\n\n"
+                        + "Low values (0.5-1.5): Looser selection, covers more area (RGB/GRAY/HSV). "
+                        + "Use for large uniform regions like stroma or background.\n"
+                        + "Medium values (2.0-4.0): Balanced. Good default for most tasks.\n"
+                        + "High values (5.0+): Tighter, more precise selection (RGB/GRAY/HSV). "
+                        + "Use when boundaries are well-defined and you want to avoid leaking.\n\n"
                         + "Tip: Scroll the mouse wheel while drawing to adjust this in real-time.")
                 .build());
 
