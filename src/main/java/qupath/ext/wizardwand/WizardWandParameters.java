@@ -185,4 +185,30 @@ public class WizardWandParameters {
         setSensitivity(preset.getSensitivity());
         morphKernelSize.set(preset.getClosingSize());
     }
+
+    /**
+     * Reset all Wizard Wand preferences to their default values.
+     * Does not affect any other QuPath preferences.
+     */
+    public static void resetDefaults() {
+        wandType.set(WizardWandType.RGB);
+        sensitivity.set(0.6);
+        sigma.set(4.0);
+        useOverlays.set(true);
+        strictConnectivity.set(false);
+        morphKernelSize.set(5);
+        fillHoles.set(true);
+        minHoleSize.set(100);
+        edgeAware.set(false);
+        edgeStrength.set(0.5);
+        simplifyTolerance.set(0.5);
+        aggressiveSimplifyTolerance.set(3.0);
+        dwellDelay.set(300.0);
+        dwellExpansionRate.set(0.5);
+        dwellMaxBoost.set(3.0);
+        scrollSensitivityStep.set(0.15);
+        sensitivityMin.set(0.05);
+        sensitivityMax.set(5.0);
+        dwellSensitivityBoost.set(0.0);
+    }
 }
