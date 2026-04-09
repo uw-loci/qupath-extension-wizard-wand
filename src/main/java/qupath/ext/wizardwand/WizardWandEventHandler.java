@@ -283,7 +283,12 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
                 return null;
 
             matMask.put(Scalar.ZERO);
-            opencv_imgproc.circle(matMask, seed, radius, Scalar.ONE);
+            // Draw with thickness=2 so the boundary is an effective barrier for
+            // both 4- and 8-connectivity flood fill. A 1-pixel outline can be
+            // "leaked through" diagonally by 8-connectivity, causing the flood
+            // fill to escape the circle and fill the entire sampling window.
+            opencv_imgproc.circle(matMask, seed, radius, Scalar.ONE, 2,
+                    opencv_imgproc.LINE_8, 0);
 
             // --- Stage 4: Edge-Aware barriers (optional, applied to mask) ---
             // Mark strong edge pixels as barriers in the mask BEFORE flood fill.
