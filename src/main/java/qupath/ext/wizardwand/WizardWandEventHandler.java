@@ -29,6 +29,7 @@ import org.locationtech.jts.geom.util.GeometryCombiner;
 import org.locationtech.jts.simplify.VWSimplifier;
 import org.bytedeco.javacpp.indexer.FloatIndexer;
 import org.bytedeco.javacpp.indexer.IntIndexer;
+import org.bytedeco.javacpp.indexer.UByteIndexer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,14 +88,12 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
     private Mat matHsv = null;          // Reusable Mat for HSV mode (avoids corrupting shared mat)
     private Mat matEdge = null;         // Reusable Mat for dedicated edge capture (pyramid offset > 0)
     private final Mat emptyMat = new Mat(); // Reusable empty Mat for drawContours hierarchy arg
-    // Pre-computed disk template bytes to avoid any ambiguity with Mat.put(Scalar) / circle(FILLED)
-    private byte[] diskTemplate = null;
-    private int diskTemplateRadius = -1;
 
     // --- Drawing state ---
     private Point2D pLast = null;
     private volatile boolean drawing = false;
     private boolean forceRefresh = false; // Set by scroll handler to bypass position check
+    private boolean firstUpdateOfStroke = false; // Set on mousePressed, cleared after first mask sanity log
     private double lastDrawX, lastDrawY;
     private MouseEvent lastMouseEvent;
 
@@ -118,6 +117,7 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
     public void resetDrawingState() {
         drawing = false;
         forceRefresh = false;
+        firstUpdateOfStroke = false;
         lastMouseEvent = null;
         pLast = null;
         dwellTimer.stopDwell();
@@ -147,6 +147,7 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
         super.mousePressed(e);
         if (e.isPrimaryButtonDown() && !e.isConsumed()) {
             drawing = true;
+            firstUpdateOfStroke = true;
             var viewer = getViewer();
             if (viewer != null) {
                 var p = viewer.componentPointToImagePoint(e.getX(), e.getY(), null, false);
@@ -176,6 +177,7 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
     @Override
     public void mouseReleased(MouseEvent e) {
         drawing = false;
+        firstUpdateOfStroke = false;
         dwellTimer.stopDwell();
         lastMouseEvent = null;
         pLast = null;
@@ -302,6 +304,13 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
             // (fillable). The disk center matches the `seed` used for flood fill.
             writeDiskMask(radius);
 
+            // One-shot sanity check per stroke (debug only). Confirms that the
+            // disk barrier is written to all four quadrants, not just one.
+            if (firstUpdateOfStroke) {
+                logMaskSanity(radius);
+                firstUpdateOfStroke = false;
+            }
+
             // --- Stage 4: Edge-Aware barriers (optional, applied to mask) ---
             // Mark strong edge pixels as barriers in the mask BEFORE flood fill.
             // Non-zero mask pixels prevent floodFill from crossing them.
@@ -399,35 +408,59 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
      * mask coordinates (W/2 + 1, W/2 + 1) -- i.e. the mask pixel that corresponds
      * to image pixel (W/2, W/2), which is the flood fill seed.
      * <p>
-     * Writes the mask ROW BY ROW using Mat.ptr(row).put(byte[]) so that the Mat's
-     * actual step (which may include alignment padding beyond cols * elemSize) is
-     * respected. A previous version wrote the template linearly via createBuffer(),
-     * which silently corrupted the mask when step > cols and left it with no
-     * barriers -- causing flood fill to escape and produce square selections.
-     * <p>
-     * The per-row template and the full row array are cached and only rebuilt
-     * when the radius changes.
+     * Uses a UByteIndexer, which is the idiomatic JavaCPP pattern for per-pixel
+     * writes into an OpenCV Mat (see {@code OpenCVTools.putPixelsUnsigned}).
+     * Earlier versions tried {@code circle(FILLED)}, linear {@code createBuffer().put()},
+     * and {@code Mat.ptr(row).put(byte[])}; all exhibited intermittent or systematic
+     * failures (notably: disk only materializing in the top-left quadrant) because
+     * they did not reliably honor the Mat's row stride. The indexer owns that
+     * stride accounting.
      */
     private void writeDiskMask(int radius) {
-        int width = W + 2;
-        if (diskTemplate == null || diskTemplate.length != width * width
-                || diskTemplateRadius != radius) {
-            diskTemplate = new byte[width * width];
-            int cx = W / 2 + 1; // seed in mask coords
-            int cy = W / 2 + 1;
-            long r2 = (long) radius * radius;
+        int width = W + 2;            // 151
+        int cx = W / 2 + 1;            // disk center matches seed in mask coords
+        int cy = W / 2 + 1;
+        long r2 = (long) radius * radius;
+        try (UByteIndexer idx = matMask.createIndexer()) {
             for (int y = 0; y < width; y++) {
                 for (int x = 0; x < width; x++) {
                     int dx = x - cx;
                     int dy = y - cy;
-                    diskTemplate[y * width + x] = (dx * dx + dy * dy <= r2) ? (byte) 0 : (byte) 1;
+                    idx.put(y, x, (dx * dx + dy * dy <= r2) ? 0 : 1);
                 }
             }
-            diskTemplateRadius = radius;
         }
-        // Write row by row, using Mat.ptr(row) so the Mat's row stride is honored
-        for (int y = 0; y < width; y++) {
-            matMask.ptr(y).put(diskTemplate, y * width, width);
+    }
+
+    /**
+     * Sanity-check the disk barrier by sampling one point per quadrant at the
+     * disk edge. Expected state after {@link #writeDiskMask(int)}:
+     * <ul>
+     *   <li>points just inside the disk edge -> 0 (fillable)</li>
+     *   <li>points at the mask corners -> 1 (barrier)</li>
+     * </ul>
+     * Logged once per stroke at debug level to catch regressions in the mask
+     * write path. Gated by {@code firstUpdateOfStroke} so it doesn't spam on
+     * every drag event.
+     */
+    private void logMaskSanity(int radius) {
+        if (!logger.isDebugEnabled())
+            return;
+        int cx = W / 2 + 1;
+        int cy = W / 2 + 1;
+        try (UByteIndexer idx = matMask.createIndexer()) {
+            // Sample one pixel inside each quadrant, just shy of the disk edge
+            int inner = Math.max(1, radius - 1);
+            int insideTL = idx.get(cy - inner, cx - inner);
+            int insideTR = idx.get(cy - inner, cx + inner);
+            int insideBL = idx.get(cy + inner, cx - inner);
+            int insideBR = idx.get(cy + inner, cx + inner);
+            int outsideTL = idx.get(0, 0);
+            int outsideBR = idx.get(W + 1, W + 1);
+            logger.debug("matMask sanity step={} rows={} cols={} r={} inside[TL,TR,BL,BR]=[{},{},{},{}] outside[TL,BR]=[{},{}]",
+                    matMask.step(0), matMask.rows(), matMask.cols(), radius,
+                    insideTL, insideTR, insideBL, insideBR,
+                    outsideTL, outsideBR);
         }
     }
 
