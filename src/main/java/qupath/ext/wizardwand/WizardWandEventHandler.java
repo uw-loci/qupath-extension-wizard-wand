@@ -164,6 +164,33 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
         dwellTimer.stopDwell();
         lastMouseEvent = null;
         pLast = null;
+
+        // Apply final hole filling to the complete annotation before committing.
+        // This catches holes formed by union of multiple drag strokes that
+        // the per-stroke fill in createShape() cannot prevent.
+        if (WizardWandParameters.getFillHoles()) {
+            var viewer = getViewer();
+            if (viewer != null) {
+                var selected = viewer.getSelectedObject();
+                if (selected != null && selected.isAnnotation() && selected.isEditable()
+                        && selected.hasROI() && selected.getROI().isArea()) {
+                    var roi = selected.getROI();
+                    var geom = roi.getGeometry();
+                    int minHoleSize = WizardWandParameters.getMinHoleSize();
+                    Geometry filled;
+                    if (minHoleSize <= 0) {
+                        filled = GeometryTools.fillHoles(geom);
+                    } else {
+                        filled = GeometryTools.removeInteriorRings(geom, minHoleSize);
+                    }
+                    if (filled != geom && !filled.isEmpty()) {
+                        var newRoi = GeometryTools.geometryToROI(filled, roi.getImagePlane());
+                        ((qupath.lib.objects.PathAnnotationObject) selected).setROI(newRoi);
+                    }
+                }
+            }
+        }
+
         super.mouseReleased(e);
     }
 
@@ -295,6 +322,18 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
                 viewer.getServerWidth(), viewer.getServerHeight());
         if (geometry.getArea() <= 1)
             return null;
+
+        // --- Geometry-level Hole Filling ---
+        // This catches holes that the mask-level fill misses, including holes
+        // formed during geometry union operations when dragging
+        if (WizardWandParameters.getFillHoles()) {
+            int minHoleSize = WizardWandParameters.getMinHoleSize();
+            if (minHoleSize <= 0) {
+                geometry = GeometryTools.fillHoles(geometry);
+            } else {
+                geometry = GeometryTools.removeInteriorRings(geometry, minHoleSize);
+            }
+        }
 
         // --- Live Simplification ---
         double tolerance = e.isShiftDown()
