@@ -88,6 +88,7 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
     // --- Drawing state ---
     private Point2D pLast = null;
     private volatile boolean drawing = false;
+    private boolean forceRefresh = false; // Set by scroll handler to bypass position check
     private double lastDrawX, lastDrawY;
     private MouseEvent lastMouseEvent;
 
@@ -119,10 +120,13 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
         if (!drawing || lastMouseEvent == null) {
             return;
         }
-        // Trigger a synthetic drag event to refresh the shape
-        // This uses the existing BrushToolEventHandler.mouseDragged() flow
-        // which calls getUpdatedObject() -> createShape()
-        mouseDragged(lastMouseEvent);
+        // Set flag to bypass the position-unchanged early return in createShape()
+        forceRefresh = true;
+        try {
+            mouseDragged(lastMouseEvent);
+        } finally {
+            forceRefresh = false;
+        }
     }
 
     // --- Mouse event overrides for dwell lifecycle ---
@@ -201,8 +205,9 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
 
         GeometryFactory factory = getGeometryFactory();
 
-        // Skip if position hasn't changed enough
-        if (addToShape != null && pLast != null && pLast.distanceSq(x, y) < 2)
+        // Skip if position hasn't changed enough -- BUT allow re-creation when
+        // forceRefresh is set (scroll wheel or dwell timer triggered a refresh)
+        if (addToShape != null && pLast != null && pLast.distanceSq(x, y) < 2 && !forceRefresh)
             return null;
 
         long startTime = System.currentTimeMillis();
