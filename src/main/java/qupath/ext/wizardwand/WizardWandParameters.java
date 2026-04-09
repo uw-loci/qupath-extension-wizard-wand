@@ -19,11 +19,12 @@ public class WizardWandParameters {
     private static final ObjectProperty<WizardWandType> wandType =
             PathPrefs.createPersistentPreference("wizardWandType", WizardWandType.RGB, WizardWandType.class);
 
-    // Key changed from "wizardWandSensitivity" to force new default after formula change
-    // (old formula: threshold = stddev/sensitivity; new formula: threshold = stddev*sensitivity)
-    // Default 1.0 = threshold equals stddev, slightly more generous than original wand (0.5*stddev)
+    // Key changed from "wizardWandSensitivity" to force new default after formula change.
+    // Formula: threshold = stddev * sensitivity.
+    // Default 0.6 is in the middle of the typically-useful range (0.4-1.0) based
+    // on testing. Users can scroll-wheel to adjust while drawing.
     private static final DoubleProperty sensitivity =
-            PathPrefs.createPersistentPreference("wizardWandSensitivityV2", 1.0);
+            PathPrefs.createPersistentPreference("wizardWandSensitivityV3", 0.6);
 
     private static final DoubleProperty sigma =
             PathPrefs.createPersistentPreference("wizardWandSigma", 4.0);
@@ -67,8 +68,10 @@ public class WizardWandParameters {
     private static final DoubleProperty dwellMaxBoost =
             PathPrefs.createPersistentPreference("wizardWandDwellMaxBoostV2", 3.0);
 
+    // Interpreted as a multiplicative factor: 0.15 = 15% change per scroll tick
+    // (newValue = current * 1.15 up, or current / 1.15 down)
     private static final DoubleProperty scrollSensitivityStep =
-            PathPrefs.createPersistentPreference("wizardWandScrollSensitivityStepV2", 0.1);
+            PathPrefs.createPersistentPreference("wizardWandScrollFactorV3", 0.15);
 
     private static final DoubleProperty sensitivityMin =
             PathPrefs.createPersistentPreference("wizardWandSensitivityMinV2", 0.05);
@@ -153,14 +156,25 @@ public class WizardWandParameters {
     }
 
     /**
-     * Adjust sensitivity by a delta amount (from scroll wheel).
-     * Clamps to configurable [min, max] range.
+     * Adjust sensitivity by a scroll tick.
+     * Uses multiplicative adjustment so each tick produces a consistent
+     * relative change regardless of the current sensitivity value.
+     * <p>
+     * scrollSensitivityStep is interpreted as a fractional factor. For
+     * example, 0.15 means each tick changes by 15% (multiply or divide
+     * by 1.15). This gives intuitive fine control across the full range.
      */
     public static void adjustSensitivity(double delta) {
         double current = getSensitivity();
-        double step = getScrollSensitivityStep();
-        double newValue = Math.max(getSensitivityMin(),
-                Math.min(getSensitivityMax(), current + delta * step));
+        double factor = 1.0 + Math.abs(getScrollSensitivityStep());
+        double newValue;
+        if (delta > 0) {
+            newValue = current * factor;
+        } else {
+            newValue = current / factor;
+        }
+        newValue = Math.max(getSensitivityMin(),
+                Math.min(getSensitivityMax(), newValue));
         setSensitivity(newValue);
     }
 

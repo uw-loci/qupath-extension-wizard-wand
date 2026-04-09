@@ -207,12 +207,16 @@ public class WizardWandPreferences {
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.scrollSensitivityStepProperty(), Double.class)
-                .name("Scroll step")
+                .name("Scroll factor")
                 .category(CATEGORY)
-                .description("How much each scroll wheel tick changes the sensitivity value.\n\n"
-                        + "Small values (0.1): Fine-grained control, many ticks to change significantly.\n"
-                        + "Default (0.25): Good balance.\n"
-                        + "Large values (0.5-1.0): Faster adjustment, fewer ticks needed.")
+                .description("Relative change per scroll tick (multiplicative). Each tick "
+                        + "multiplies or divides sensitivity by (1 + this value).\n\n"
+                        + "0.05: 5% change per tick. Very fine control.\n"
+                        + "0.15: 15% change per tick. Default -- balanced.\n"
+                        + "0.30: 30% change per tick. Coarser, faster adjustment.\n\n"
+                        + "Multiplicative scrolling gives consistent relative changes "
+                        + "regardless of the current sensitivity, so small values near "
+                        + "the interesting range still get fine control.")
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.sensitivityMinProperty(), Double.class)
