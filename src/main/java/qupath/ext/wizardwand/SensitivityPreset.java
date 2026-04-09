@@ -7,16 +7,16 @@ package qupath.ext.wizardwand;
 public enum SensitivityPreset {
 
     /** Tight, precise selection with light smoothing */
-    FINE(0.15, 3),
+    FINE(0.3, 3),
 
-    /** Balanced defaults */
-    STANDARD(0.5, 5),
+    /** Balanced defaults -- slightly more generous than original wand */
+    STANDARD(1.0, 5),
 
     /** Larger regions, moderate smoothing */
-    BROAD(1.0, 7),
+    BROAD(2.0, 7),
 
     /** Very loose selection, heavy smoothing */
-    AGGRESSIVE(2.0, 9);
+    AGGRESSIVE(4.0, 9);
 
     private final double sensitivity;
     private final int closingSize;

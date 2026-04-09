@@ -48,10 +48,11 @@ public class WizardWandPreferences {
                 .category(CATEGORY)
                 .description("Controls how large the wand selection grows. "
                         + "Higher values = bigger selection (consistent across all color modes).\n\n"
-                        + "Low values (0.05-0.2): Tight, precise selections. Use when tissue "
+                        + "Low values (0.1-0.5): Tight, precise selections. Use when tissue "
                         + "boundaries are well-defined and you want to avoid leaking.\n"
-                        + "Medium values (0.3-0.7): Balanced. Good default for most tasks.\n"
-                        + "High values (1.0+): Expansive selection. Use for quickly annotating "
+                        + "Medium values (0.5-1.5): Balanced. Default is 1.0, slightly more "
+                        + "generous than the built-in wand.\n"
+                        + "High values (2.0+): Expansive selection. Use for quickly annotating "
                         + "large, uniform regions like stroma or background.\n\n"
                         + "Tip: Scroll the mouse wheel while drawing to adjust this in real-time.")
                 .build());
@@ -81,19 +82,18 @@ public class WizardWandPreferences {
 
         // --- Selection refinement ---
 
-        items.add(new PropertyItemBuilder<>(WizardWandParameters.connectivityProperty(), Integer.class)
-                .name("Connectivity")
+        items.add(new PropertyItemBuilder<>(WizardWandParameters.strictConnectivityProperty(), Boolean.class)
+                .name("Strict connectivity")
                 .category(CATEGORY)
-                .description("How neighboring pixels are considered when growing the selection.\n\n"
-                        + "4 (Strict): Only horizontal and vertical neighbors. Produces more angular "
-                        + "selections that won't leak through thin diagonal gaps. Use when structures "
-                        + "have thin boundaries that the selection keeps crossing.\n"
-                        + "8 (Relaxed): Also includes diagonal neighbors. Produces smoother, rounder "
-                        + "selections that fill corners better. Good for most annotations.")
+                .description("When checked, uses 4-connectivity (horizontal/vertical neighbors only). "
+                        + "Produces more angular selections that won't leak through thin diagonal gaps. "
+                        + "Use when structures have thin boundaries the selection keeps crossing.\n\n"
+                        + "When unchecked (default), uses 8-connectivity which also includes diagonal "
+                        + "neighbors. Produces smoother, rounder selections that fill corners better.")
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.morphKernelSizeProperty(), Integer.class)
-                .name("Selection smoothing")
+                .name("Smoothing")
                 .category(CATEGORY)
                 .description("Smooths the selection boundary after flood fill (morphological closing). "
                         + "Use odd values.\n\n"
@@ -116,7 +116,7 @@ public class WizardWandPreferences {
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.minHoleSizeProperty(), Integer.class)
-                .name("Min hole size (px^2)")
+                .name("Min hole size")
                 .category(CATEGORY)
                 .description("Only fill holes smaller than this area (in square pixels). "
                         + "Set to 0 to fill ALL holes regardless of size.\n\n"
@@ -165,7 +165,7 @@ public class WizardWandPreferences {
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.aggressiveSimplifyToleranceProperty(), Double.class)
-                .name("Shift-drag simplification")
+                .name("Shift simplify")
                 .category(CATEGORY)
                 .description("Simplification tolerance applied when holding Shift while drawing. "
                         + "Use for rapid rough annotations with far fewer anchor points.\n\n"
@@ -188,7 +188,7 @@ public class WizardWandPreferences {
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.dwellExpansionRateProperty(), Double.class)
-                .name("Dwell expansion rate")
+                .name("Dwell rate")
                 .category(CATEGORY)
                 .description("How fast the selection grows during dwell expansion.\n\n"
                         + "Low values (0.1-0.3): Slow, controlled expansion. Easier to stop at the "
@@ -216,14 +216,14 @@ public class WizardWandPreferences {
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.sensitivityMinProperty(), Double.class)
-                .name("Sensitivity minimum")
+                .name("Sensitivity min")
                 .category(CATEGORY)
                 .description("Lower bound for sensitivity. Scroll wheel and dwell cannot go below this.\n"
                         + "Default: 0.25")
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.sensitivityMaxProperty(), Double.class)
-                .name("Sensitivity maximum")
+                .name("Sensitivity max")
                 .category(CATEGORY)
                 .description("Upper bound for sensitivity. Scroll wheel and dwell cannot exceed this.\n"
                         + "Default: 15.0")

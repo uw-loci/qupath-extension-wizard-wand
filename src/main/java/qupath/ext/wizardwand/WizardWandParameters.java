@@ -21,8 +21,9 @@ public class WizardWandParameters {
 
     // Key changed from "wizardWandSensitivity" to force new default after formula change
     // (old formula: threshold = stddev/sensitivity; new formula: threshold = stddev*sensitivity)
+    // Default 1.0 = threshold equals stddev, slightly more generous than original wand (0.5*stddev)
     private static final DoubleProperty sensitivity =
-            PathPrefs.createPersistentPreference("wizardWandSensitivityV2", 0.5);
+            PathPrefs.createPersistentPreference("wizardWandSensitivityV2", 1.0);
 
     private static final DoubleProperty sigma =
             PathPrefs.createPersistentPreference("wizardWandSigma", 4.0);
@@ -30,8 +31,9 @@ public class WizardWandParameters {
     private static final BooleanProperty useOverlays =
             PathPrefs.createPersistentPreference("wizardWandUseOverlays", true);
 
-    private static final IntegerProperty connectivity =
-            PathPrefs.createPersistentPreference("wizardWandConnectivity", 4);
+    // true = strict 4-connectivity (edges only), false = relaxed 8-connectivity (default, includes diagonals)
+    private static final BooleanProperty strictConnectivity =
+            PathPrefs.createPersistentPreference("wizardWandStrictConnectivity", false);
 
     private static final IntegerProperty morphKernelSize =
             PathPrefs.createPersistentPreference("wizardWandMorphKernelSize", 5);
@@ -66,7 +68,7 @@ public class WizardWandParameters {
             PathPrefs.createPersistentPreference("wizardWandDwellMaxBoostV2", 3.0);
 
     private static final DoubleProperty scrollSensitivityStep =
-            PathPrefs.createPersistentPreference("wizardWandScrollSensitivityStepV2", 0.05);
+            PathPrefs.createPersistentPreference("wizardWandScrollSensitivityStepV2", 0.1);
 
     private static final DoubleProperty sensitivityMin =
             PathPrefs.createPersistentPreference("wizardWandSensitivityMinV2", 0.05);
@@ -94,8 +96,10 @@ public class WizardWandParameters {
     public static BooleanProperty useOverlaysProperty() { return useOverlays; }
     public static boolean getUseOverlays() { return useOverlays.get(); }
 
-    public static IntegerProperty connectivityProperty() { return connectivity; }
-    public static int getConnectivity() { return connectivity.get(); }
+    public static BooleanProperty strictConnectivityProperty() { return strictConnectivity; }
+    public static boolean getStrictConnectivity() { return strictConnectivity.get(); }
+    /** Returns 4 for strict connectivity, 8 for relaxed (default). */
+    public static int getConnectivity() { return strictConnectivity.get() ? 4 : 8; }
 
     public static IntegerProperty morphKernelSizeProperty() { return morphKernelSize; }
     public static int getMorphKernelSize() { return morphKernelSize.get(); }
