@@ -1,19 +1,20 @@
 package qupath.ext.wizardwand;
 
 import javafx.application.Platform;
+import javafx.scene.Node;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import org.bytedeco.javacpp.Loader;
 import org.bytedeco.opencv.global.opencv_core;
 import org.bytedeco.opencv.global.opencv_imgproc;
+import org.controlsfx.glyphfont.FontAwesome;
+import org.controlsfx.glyphfont.GlyphFontRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.extensions.QuPathExtension;
-import qupath.lib.gui.tools.IconFactory;
-import qupath.lib.gui.tools.IconFactory.PathIcons;
 import qupath.lib.gui.viewer.tools.PathTool;
 
 /**
@@ -66,11 +67,9 @@ public class WizardWandExtension implements QuPathExtension {
             var eventHandler = new WizardWandEventHandler();
             var scrollHandler = new WizardWandScrollHandler(eventHandler);
 
-            // Use the WAND_TOOL icon -- same glyph, users distinguish by toolbar position and name
-            var icon = IconFactory.createNode(
-                    QuPathGUI.TOOLBAR_ICON_SIZE,
-                    QuPathGUI.TOOLBAR_ICON_SIZE,
-                    PathIcons.WAND_TOOL);
+            // Use FontAwesome MAGIC glyph (wand with sparkles) to distinguish
+            // from the built-in wand tool which uses icoMoon wand glyph
+            var icon = createWizardWandIcon(QuPathGUI.TOOLBAR_ICON_SIZE);
 
             PathTool wizardWandTool = new WizardWandPathTool(
                     eventHandler, scrollHandler, "Wizard Wand", icon);
@@ -101,6 +100,25 @@ public class WizardWandExtension implements QuPathExtension {
             return;
         }
         WizardWandPreferences.installPreferences(qupath);
+    }
+
+    /**
+     * Create a distinctive icon for the Wizard Wand using FontAwesome's MAGIC glyph
+     * (wand with sparkles), colored to match annotation objects.
+     */
+    private static Node createWizardWandIcon(int size) {
+        var fontAwesome = GlyphFontRegistry.font("FontAwesome");
+        var glyph = fontAwesome.create(FontAwesome.Glyph.MAGIC).size(size);
+        glyph.setAlignment(javafx.geometry.Pos.CENTER);
+        glyph.setContentDisplay(javafx.scene.control.ContentDisplay.CENTER);
+        glyph.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
+        glyph.getStyleClass().add("qupath-icon");
+        // Bind color to annotation color preference so it matches the theme
+        glyph.textFillProperty().bind(javafx.beans.binding.Bindings.createObjectBinding(
+                () -> qupath.lib.gui.tools.ColorToolsFX.getCachedColor(
+                        qupath.lib.gui.prefs.PathPrefs.colorDefaultObjectsProperty().get()),
+                qupath.lib.gui.prefs.PathPrefs.colorDefaultObjectsProperty()));
+        return glyph;
     }
 
     /**
