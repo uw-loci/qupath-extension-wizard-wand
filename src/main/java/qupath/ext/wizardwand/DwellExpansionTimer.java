@@ -97,8 +97,7 @@ public class DwellExpansionTimer extends AnimationTimer {
         double dwellFactor = rate * Math.log(1.0 + dwellTimeMs / 200.0);
 
         // Cap the dwell boost to prevent runaway expansion
-        double maxBoost = 10.0;
-        dwellFactor = Math.min(dwellFactor, maxBoost);
+        dwellFactor = Math.min(dwellFactor, WizardWandParameters.getDwellMaxBoost());
 
         WizardWandParameters.setDwellSensitivityBoost(dwellFactor);
 

@@ -52,4 +52,24 @@ public class WizardWandPreferences {
 
     @DoublePref("Aggressive simplification tolerance (Shift)")
     public final DoubleProperty aggressiveSimplifyTolerance = WizardWandParameters.aggressiveSimplifyToleranceProperty();
+
+    // --- Interaction tuning ---
+
+    @DoublePref("Dwell delay before expansion (ms)")
+    public final DoubleProperty dwellDelay = WizardWandParameters.dwellDelayProperty();
+
+    @DoublePref("Dwell expansion rate")
+    public final DoubleProperty dwellExpansionRate = WizardWandParameters.dwellExpansionRateProperty();
+
+    @DoublePref("Dwell max sensitivity boost")
+    public final DoubleProperty dwellMaxBoost = WizardWandParameters.dwellMaxBoostProperty();
+
+    @DoublePref("Scroll wheel sensitivity step")
+    public final DoubleProperty scrollSensitivityStep = WizardWandParameters.scrollSensitivityStepProperty();
+
+    @DoublePref("Minimum sensitivity")
+    public final DoubleProperty sensitivityMin = WizardWandParameters.sensitivityMinProperty();
+
+    @DoublePref("Maximum sensitivity")
+    public final DoubleProperty sensitivityMax = WizardWandParameters.sensitivityMaxProperty();
 }

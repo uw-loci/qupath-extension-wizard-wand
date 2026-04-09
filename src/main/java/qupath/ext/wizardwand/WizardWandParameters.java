@@ -4,7 +4,7 @@ import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.ObjectProperty;
-import javafx.beans.property.SimpleDoubleProperty;
+import javafx.beans.property.SimpleDoubleProperty; // Used for transient dwellSensitivityBoost
 import qupath.lib.gui.prefs.PathPrefs;
 
 /**
@@ -52,13 +52,27 @@ public class WizardWandParameters {
     private static final DoubleProperty aggressiveSimplifyTolerance =
             PathPrefs.createPersistentPreference("wizardWandAggressiveSimplifyTolerance", 3.0);
 
-    // --- Session-only properties (reset on restart) ---
+    // --- Interaction tuning (persisted) ---
 
-    private static final DoubleProperty dwellDelay = new SimpleDoubleProperty(300.0);
-    private static final DoubleProperty dwellExpansionRate = new SimpleDoubleProperty(0.5);
-    private static final DoubleProperty scrollSensitivityStep = new SimpleDoubleProperty(0.25);
+    private static final DoubleProperty dwellDelay =
+            PathPrefs.createPersistentPreference("wizardWandDwellDelay", 300.0);
 
-    // --- Transient state (reset per drawing operation) ---
+    private static final DoubleProperty dwellExpansionRate =
+            PathPrefs.createPersistentPreference("wizardWandDwellExpansionRate", 0.5);
+
+    private static final DoubleProperty dwellMaxBoost =
+            PathPrefs.createPersistentPreference("wizardWandDwellMaxBoost", 10.0);
+
+    private static final DoubleProperty scrollSensitivityStep =
+            PathPrefs.createPersistentPreference("wizardWandScrollSensitivityStep", 0.25);
+
+    private static final DoubleProperty sensitivityMin =
+            PathPrefs.createPersistentPreference("wizardWandSensitivityMin", 0.25);
+
+    private static final DoubleProperty sensitivityMax =
+            PathPrefs.createPersistentPreference("wizardWandSensitivityMax", 15.0);
+
+    // --- Transient state (reset per drawing operation, not persisted) ---
 
     private static final DoubleProperty dwellSensitivityBoost = new SimpleDoubleProperty(0.0);
 
@@ -108,8 +122,17 @@ public class WizardWandParameters {
     public static DoubleProperty dwellExpansionRateProperty() { return dwellExpansionRate; }
     public static double getDwellExpansionRate() { return dwellExpansionRate.get(); }
 
+    public static DoubleProperty dwellMaxBoostProperty() { return dwellMaxBoost; }
+    public static double getDwellMaxBoost() { return dwellMaxBoost.get(); }
+
     public static DoubleProperty scrollSensitivityStepProperty() { return scrollSensitivityStep; }
     public static double getScrollSensitivityStep() { return scrollSensitivityStep.get(); }
+
+    public static DoubleProperty sensitivityMinProperty() { return sensitivityMin; }
+    public static double getSensitivityMin() { return sensitivityMin.get(); }
+
+    public static DoubleProperty sensitivityMaxProperty() { return sensitivityMax; }
+    public static double getSensitivityMax() { return sensitivityMax.get(); }
 
     public static DoubleProperty dwellSensitivityBoostProperty() { return dwellSensitivityBoost; }
     public static double getDwellSensitivityBoost() { return dwellSensitivityBoost.get(); }
@@ -119,17 +142,19 @@ public class WizardWandParameters {
      * Get the effective sensitivity (base + dwell boost), clamped to valid range.
      */
     public static double getEffectiveSensitivity() {
-        return Math.max(0.25, Math.min(15.0, getSensitivity() + getDwellSensitivityBoost()));
+        return Math.max(getSensitivityMin(),
+                Math.min(getSensitivityMax(), getSensitivity() + getDwellSensitivityBoost()));
     }
 
     /**
      * Adjust sensitivity by a delta amount (from scroll wheel).
-     * Clamps to [0.25, 15.0].
+     * Clamps to configurable [min, max] range.
      */
     public static void adjustSensitivity(double delta) {
         double current = getSensitivity();
         double step = getScrollSensitivityStep();
-        double newValue = Math.max(0.25, Math.min(15.0, current + delta * step));
+        double newValue = Math.max(getSensitivityMin(),
+                Math.min(getSensitivityMax(), current + delta * step));
         setSensitivity(newValue);
     }
 
