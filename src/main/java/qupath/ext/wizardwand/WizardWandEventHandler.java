@@ -254,6 +254,12 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
         // --- Ctrl = simple selection (exact match, no smoothing) ---
         boolean doSimpleSelection = e.isShortcutDown() && !e.isShiftDown();
 
+        // One-shot diagnostic per stroke (at WARN level so it surfaces without
+        // logback changes). Gives a per-stage readout of the mask and the final
+        // geometry so we can tell exactly where the "top-left curved, rest
+        // square" bug is being introduced.
+        boolean diagnose = firstUpdateOfStroke;
+
         if (doSimpleSelection) {
             matMask.put(Scalar.ZERO);
             int conn = WizardWandParameters.getConnectivity();
@@ -304,11 +310,8 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
             // (fillable). The disk center matches the `seed` used for flood fill.
             writeDiskMask(radius);
 
-            // One-shot sanity check per stroke (debug only). Confirms that the
-            // disk barrier is written to all four quadrants, not just one.
-            if (firstUpdateOfStroke) {
-                logMaskSanity(radius);
-                firstUpdateOfStroke = false;
+            if (diagnose) {
+                logMaskStats("afterWriteDisk", radius);
             }
 
             // --- Stage 4: Edge-Aware barriers (optional, applied to mask) ---
@@ -316,13 +319,22 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
             // Non-zero mask pixels prevent floodFill from crossing them.
             if (WizardWandParameters.getEdgeAware()) {
                 applyEdgeBarriersToMask(matThreshold, nChannels, viewer, x, y, downsample);
+                if (diagnose) {
+                    logMaskStats("afterEdgeBarriers", radius);
+                }
             }
 
             int conn = WizardWandParameters.getConnectivity();
             opencv_imgproc.floodFill(matThreshold, matMask, seed, Scalar.ONE, null,
                     threshold, threshold,
                     conn | (2 << 8) | opencv_imgproc.FLOODFILL_MASK_ONLY | opencv_imgproc.FLOODFILL_FIXED_RANGE);
+            if (diagnose) {
+                logMaskStats("afterFloodFill", radius);
+            }
             subtractPut(matMask, Scalar.ONE);
+            if (diagnose) {
+                logMaskStats("afterSubtract", radius);
+            }
 
             // --- Stage 6: Morphological Closing ---
             int kernelSize = WizardWandParameters.getMorphKernelSize();
@@ -338,18 +350,44 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
                     lastStrelSize = kernelSize;
                 }
                 opencv_imgproc.morphologyEx(matMask, matMask, opencv_imgproc.MORPH_CLOSE, strel);
+                if (diagnose) {
+                    logMaskStats("afterMorph", radius);
+                }
             }
 
             // --- Stage 7: Hole Filling ---
             if (WizardWandParameters.getFillHoles()) {
                 fillHoles(matMask);
+                if (diagnose) {
+                    logMaskStats("afterFillHoles", radius);
+                }
             }
+
         }
 
         // --- Stage 8: Contour Extraction -> JTS Geometry ---
         Geometry geometry = extractContours(factory);
-        if (geometry == null)
+        if (diagnose) {
+            if (geometry == null) {
+                logger.warn("WizardWand[extractContours] geometry=null");
+            } else {
+                var env = geometry.getEnvelopeInternal();
+                double area = geometry.getArea();
+                double envArea = env.getWidth() * env.getHeight();
+                double ratio = envArea > 0 ? area / envArea : 0;
+                logger.warn("WizardWand[extractContours] geomType={} numGeoms={} area={} envelope=[{},{},{},{}] areaRatio={} (1.0=square, ~0.785=circle)",
+                        geometry.getGeometryType(), geometry.getNumGeometries(),
+                        String.format("%.1f", area),
+                        String.format("%.1f", env.getMinX()), String.format("%.1f", env.getMinY()),
+                        String.format("%.1f", env.getMaxX()), String.format("%.1f", env.getMaxY()),
+                        String.format("%.3f", ratio));
+            }
+        }
+        if (geometry == null) {
+            if (firstUpdateOfStroke)
+                firstUpdateOfStroke = false;
             return null;
+        }
 
         // --- Stage 9: Transform to Image Space ---
         var transform = new AffineTransformation()
@@ -388,6 +426,19 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
 
         long endTime = System.currentTimeMillis();
         logger.trace("{} time: {}ms", getClass().getSimpleName(), endTime - startTime);
+
+        if (diagnose) {
+            var env = geometry.getEnvelopeInternal();
+            double area = geometry.getArea();
+            double envArea = env.getWidth() * env.getHeight();
+            double ratio = envArea > 0 ? area / envArea : 0;
+            logger.warn("WizardWand[finalGeometry] area={} envelope=[{},{},{},{}] areaRatio={}",
+                    String.format("%.1f", area),
+                    String.format("%.1f", env.getMinX()), String.format("%.1f", env.getMinY()),
+                    String.format("%.1f", env.getMaxX()), String.format("%.1f", env.getMaxY()),
+                    String.format("%.3f", ratio));
+            firstUpdateOfStroke = false;
+        }
 
         if (pLast == null)
             pLast = new Point2D.Double(x, y);
@@ -433,35 +484,39 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
     }
 
     /**
-     * Sanity-check the disk barrier by sampling one point per quadrant at the
-     * disk edge. Expected state after {@link #writeDiskMask(int)}:
-     * <ul>
-     *   <li>points just inside the disk edge -> 0 (fillable)</li>
-     *   <li>points at the mask corners -> 1 (barrier)</li>
-     * </ul>
-     * Logged once per stroke at debug level to catch regressions in the mask
-     * write path. Gated by {@code firstUpdateOfStroke} so it doesn't spam on
-     * every drag event.
+     * Per-quadrant pixel count of the mask at a given pipeline stage, logged at WARN
+     * so the user sees it without reconfiguring logback. Counts zero vs non-zero
+     * pixels in each quadrant of the {@code matMask} (split at the disk center).
+     * If the disk is correctly set up, the four quadrants should have identical
+     * non-zero counts. Any asymmetry points at the stage that introduced the bug.
      */
-    private void logMaskSanity(int radius) {
-        if (!logger.isDebugEnabled())
-            return;
+    private void logMaskStats(String stage, int radius) {
         int cx = W / 2 + 1;
         int cy = W / 2 + 1;
+        int[] nonzero = new int[4]; // TL, TR, BL, BR
+        int[] total = new int[4];
+        int[] uniqueValSample = new int[4];
         try (UByteIndexer idx = matMask.createIndexer()) {
-            // Sample one pixel inside each quadrant, just shy of the disk edge
-            int inner = Math.max(1, radius - 1);
-            int insideTL = idx.get(cy - inner, cx - inner);
-            int insideTR = idx.get(cy - inner, cx + inner);
-            int insideBL = idx.get(cy + inner, cx - inner);
-            int insideBR = idx.get(cy + inner, cx + inner);
-            int outsideTL = idx.get(0, 0);
-            int outsideBR = idx.get(W + 1, W + 1);
-            logger.debug("matMask sanity step={} rows={} cols={} r={} inside[TL,TR,BL,BR]=[{},{},{},{}] outside[TL,BR]=[{},{}]",
-                    matMask.step(0), matMask.rows(), matMask.cols(), radius,
-                    insideTL, insideTR, insideBL, insideBR,
-                    outsideTL, outsideBR);
+            for (int y = 0; y < W + 2; y++) {
+                int qy = (y < cy) ? 0 : 2;
+                for (int x = 0; x < W + 2; x++) {
+                    int q = qy + ((x < cx) ? 0 : 1);
+                    int v = idx.get(y, x);
+                    total[q]++;
+                    if (v != 0) {
+                        nonzero[q]++;
+                        uniqueValSample[q] = v;
+                    }
+                }
+            }
         }
+        logger.warn("WizardWand[{}] r={} step={} nonzero/total TL={}/{} TR={}/{} BL={}/{} BR={}/{} sampleVal[TL,TR,BL,BR]=[{},{},{},{}]",
+                stage, radius, matMask.step(0),
+                nonzero[0], total[0],
+                nonzero[1], total[1],
+                nonzero[2], total[2],
+                nonzero[3], total[3],
+                uniqueValSample[0], uniqueValSample[1], uniqueValSample[2], uniqueValSample[3]);
     }
 
     private void captureRegion(QuPathViewer viewer, BufferedImage imgTemp, double x, double y, double downsample) {
@@ -790,6 +845,20 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
 
         opencv_imgproc.findContours(matMask, contours, contourHierarchy,
                 opencv_imgproc.RETR_EXTERNAL, opencv_imgproc.CHAIN_APPROX_SIMPLE);
+
+        if (firstUpdateOfStroke) {
+            long nContours = contours.size();
+            logger.warn("WizardWand[findContours] count={}", nContours);
+            for (long i = 0; i < nContours; i++) {
+                var c = contours.get(i);
+                double area = opencv_imgproc.contourArea(c);
+                var bb = opencv_imgproc.boundingRect(c);
+                logger.warn("WizardWand[contour {}] points={} area={} bbox=[{},{} {}x{}]",
+                        i, c.size().height(),
+                        String.format("%.1f", area),
+                        bb.x(), bb.y(), bb.width(), bb.height());
+            }
+        }
 
         List<Coordinate> coords = new ArrayList<>();
         List<Geometry> geometries = new ArrayList<>();
