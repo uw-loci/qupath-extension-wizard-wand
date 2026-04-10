@@ -28,6 +28,12 @@ public class WizardWandExtension implements QuPathExtension {
     private static final Logger logger = LoggerFactory.getLogger(WizardWandExtension.class);
 
     private boolean isInstalled = false;
+    private static WizardWandEventHandler sharedEventHandler;
+
+    /** Get the shared event handler for headless wand evaluation (tuner). */
+    public static WizardWandEventHandler getSharedEventHandler() {
+        return sharedEventHandler;
+    }
 
     @Override
     public String getName() {
@@ -66,6 +72,7 @@ public class WizardWandExtension implements QuPathExtension {
 
             // Create the tool components
             var eventHandler = new WizardWandEventHandler();
+            sharedEventHandler = eventHandler;
 
             // Use FontAwesome MAGIC glyph (wand with sparkles) to distinguish
             // from the built-in wand tool which uses icoMoon wand glyph
@@ -219,9 +226,9 @@ public class WizardWandExtension implements QuPathExtension {
 
         menu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
 
-        // Auto-tune from selection
-        var tuneItem = new javafx.scene.control.MenuItem("Auto-tune from selection");
-        tuneItem.setOnAction(e -> onAutoTuneRequested());
+        // Tune wand from selection
+        var tuneItem = new javafx.scene.control.MenuItem("Tune wand from selection...");
+        tuneItem.setOnAction(e -> WizardWandTuningDialog.show(QuPathGUI.getInstance()));
         menu.getItems().add(tuneItem);
 
         menu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
@@ -248,77 +255,6 @@ public class WizardWandExtension implements QuPathExtension {
         menu.getItems().add(resetItem);
 
         return menu;
-    }
-
-    /**
-     * Handle the "Auto-tune from selection" menu action. Validates that the
-     * viewer has a single area annotation selected, then runs the parameter
-     * search with a progress dialog.
-     */
-    private void onAutoTuneRequested() {
-        var qupath = QuPathGUI.getInstance();
-        var viewer = qupath == null ? null : qupath.getViewer();
-        if (viewer == null) {
-            Dialogs.showWarningNotification("Wizard Wand",
-                    "No viewer available.");
-            return;
-        }
-
-        var sel = viewer.getSelectedObject();
-        if (sel == null || !sel.isAnnotation() || !sel.hasROI() || !sel.getROI().isArea()) {
-            Dialogs.showWarningNotification("Wizard Wand",
-                    "Select a single area annotation first (polygon or brush), "
-                            + "then try Auto-tune again.");
-            return;
-        }
-
-        javafx.concurrent.Task<WizardWandAutoTune.Result> task;
-        try {
-            task = WizardWandAutoTune.buildTask(viewer, sel);
-        } catch (IllegalArgumentException ex) {
-            Dialogs.showErrorNotification("Wizard Wand", ex.getMessage());
-            return;
-        }
-
-        // Show progress dialog
-        var progress = new org.controlsfx.dialog.ProgressDialog(task);
-        progress.setTitle("Wizard Wand");
-        progress.setHeaderText("Auto-tuning parameters...");
-
-        // Submit to background thread
-        var thread = new Thread(task, "wizard-wand-autotune");
-        thread.setDaemon(true);
-        thread.start();
-
-        progress.showAndWait();
-
-        // Apply result on FX thread
-        try {
-            var result = task.get();
-            if (result == null) {
-                // Cancelled
-                return;
-            }
-            if (result.iou() < 0.3) {
-                Dialogs.showWarningNotification("Wizard Wand",
-                        String.format("Auto-tune found no good match (best IoU %.2f). "
-                                + "Try a smaller or simpler reference annotation, or "
-                                + "disable edge-aware if it is on.", result.iou()));
-                return;
-            }
-            WizardWandParameters.setSensitivity(result.sensitivity());
-            WizardWandParameters.sigmaProperty().set(result.sigma());
-            WizardWandParameters.morphKernelSizeProperty().set(result.morphKernelSize());
-            Dialogs.showInfoNotification("Wizard Wand",
-                    String.format("Auto-tune complete (IoU %.2f)\n"
-                            + "Sensitivity: %.3f, Sigma: %.1f, Smoothing: %d",
-                            result.iou(), result.sensitivity(),
-                            result.sigma(), result.morphKernelSize()));
-        } catch (Exception ex) {
-            logger.error("Auto-tune failed: {}", ex.getMessage(), ex);
-            Dialogs.showErrorNotification("Wizard Wand",
-                    "Auto-tune failed: " + ex.getMessage());
-        }
     }
 
     /**

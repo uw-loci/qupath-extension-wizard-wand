@@ -215,21 +215,91 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
 
     // --- Core wand logic ---
 
+    /**
+     * Whether the interactive drag handler is currently active. The tuner
+     * must not call {@link #computeShapeAt} while this is true, because
+     * that method reuses the instance buffers ({@code mat}, {@code matMask},
+     * etc.) and must not race the drag handler.
+     */
+    public boolean isBusyDrawing() {
+        return drawing;
+    }
+
     @Override
     protected Geometry createShape(MouseEvent e, double x, double y, boolean useTiles, Geometry addToShape) {
 
-        GeometryFactory factory = getGeometryFactory();
-
         // Skip if position hasn't changed enough -- BUT allow re-creation when
-        // forceRefresh is set (scroll wheel or dwell timer triggered a refresh)
+        // forceRefresh is set (dwell timer triggered a refresh)
         if (addToShape != null && pLast != null && pLast.distanceSq(x, y) < 2 && !forceRefresh)
             return null;
 
-        long startTime = System.currentTimeMillis();
+        boolean doSimpleSelection = e.isShortcutDown() && !e.isShiftDown();
+        boolean shiftDown = e.isShiftDown();
+        boolean subtractMode = isSubtractMode(e);
 
-        QuPathViewer viewer = getViewer();
+        // Diagnostic logging gate: one burst per stroke
+        boolean diagnose = firstUpdateOfStroke;
+        Geometry geometry = computeShapeAt(getViewer(), x, y,
+                doSimpleSelection, shiftDown, subtractMode, diagnose);
+
+        if (geometry == null) {
+            if (firstUpdateOfStroke)
+                firstUpdateOfStroke = false;
+            return null;
+        }
+
+        if (diagnose) {
+            var env = geometry.getEnvelopeInternal();
+            double area = geometry.getArea();
+            double envArea = env.getWidth() * env.getHeight();
+            double ratio = envArea > 0 ? area / envArea : 0;
+            logger.debug("WizardWand[finalGeometry] area={} envelope=[{},{},{},{}] areaRatio={}",
+                    String.format("%.1f", area),
+                    String.format("%.1f", env.getMinX()), String.format("%.1f", env.getMinY()),
+                    String.format("%.1f", env.getMaxX()), String.format("%.1f", env.getMaxY()),
+                    String.format("%.3f", ratio));
+            firstUpdateOfStroke = false;
+        }
+
+        if (pLast == null)
+            pLast = new Point2D.Double(x, y);
+        else
+            pLast.setLocation(x, y);
+
+        return geometry;
+    }
+
+    /**
+     * Run the full wand pipeline at the given image-coordinate point and return
+     * the resulting geometry (in image coordinates), or null if nothing was
+     * produced.
+     * <p>
+     * This method is the single source of truth for wand shape computation.
+     * It is called by both the interactive drag path ({@link #createShape})
+     * and the headless tuner ({@link WizardWandTuner}). It reads current
+     * parameter values from {@link WizardWandParameters} and reuses the
+     * instance-level OpenCV buffers — callers must ensure single-threaded
+     * access (the tuner checks {@link #isBusyDrawing()} before calling).
+     *
+     * @param viewer            the active viewer (for image capture and server bounds)
+     * @param x                 image-coordinate X of the seed point
+     * @param y                 image-coordinate Y of the seed point
+     * @param doSimpleSelection true for Ctrl-click exact-match mode
+     * @param shiftDown         true to use aggressive simplification tolerance
+     * @param subtractMode      true to skip hole filling (Alt+draw subtract)
+     * @param diagnose          true to emit debug-level pipeline stage logging
+     * @return geometry in image coordinates, or null
+     */
+    Geometry computeShapeAt(QuPathViewer viewer, double x, double y,
+                            boolean doSimpleSelection, boolean shiftDown,
+                            boolean subtractMode, boolean diagnose) {
+
         if (viewer == null)
             return null;
+
+        GeometryFactory factory = getGeometryFactory();
+
+        long startTime = System.currentTimeMillis();
 
         double downsample = Math.max(1, Math.round(viewer.getDownsampleFactor() * 4)) / 4.0;
 
@@ -252,15 +322,6 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
         byte[] buffer = ((DataBufferByte) imgTemp.getRaster().getDataBuffer()).getData();
         ByteBuffer matBuffer = mat.createBuffer();
         matBuffer.put(buffer);
-
-        // --- Ctrl = simple selection (exact match, no smoothing) ---
-        boolean doSimpleSelection = e.isShortcutDown() && !e.isShiftDown();
-
-        // One-shot diagnostic per stroke (at WARN level so it surfaces without
-        // logback changes). Gives a per-stage readout of the mask and the final
-        // geometry so we can tell exactly where the "top-left curved, rest
-        // square" bug is being introduced.
-        boolean diagnose = firstUpdateOfStroke;
 
         if (doSimpleSelection) {
             matMask.put(Scalar.ZERO);
@@ -292,33 +353,17 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
                 computeStdDevThreshold(matThreshold, nChannels, effectiveSensitivity);
             }
 
-            // --- Stage 4: Edge-Aware Mode (optional) ---
             // --- Stage 5: Flood Fill ---
             int radius = (int) Math.round(W / 2.0 * QuPathPenManager.getPenManager().getPressure());
             if (radius == 0)
                 return null;
 
-            // Initialize the flood fill mask to a filled-disk pattern.
-            //
-            // We write the mask bytes directly rather than relying on
-            // Mat.put(Scalar) + opencv_imgproc.circle(FILLED). That combination
-            // was producing intermittent square selections (the whole sampling
-            // window filling) that strongly suggest either the Scalar fill or
-            // the filled-circle draw wasn't actually taking effect. Direct byte
-            // writing removes all ambiguity.
-            //
-            // Mask layout: everything = 1 (barrier), except pixels inside a disk
-            // centered at (W/2, W/2) with the current radius, which become 0
-            // (fillable). The disk center matches the `seed` used for flood fill.
             writeDiskMask(radius);
-
             if (diagnose) {
                 logMaskStats("afterWriteDisk", radius);
             }
 
-            // --- Stage 4: Edge-Aware barriers (optional, applied to mask) ---
-            // Mark strong edge pixels as barriers in the mask BEFORE flood fill.
-            // Non-zero mask pixels prevent floodFill from crossing them.
+            // --- Edge-Aware barriers (optional, applied to mask before flood fill) ---
             if (WizardWandParameters.getEdgeAware()) {
                 applyEdgeBarriersToMask(matThreshold, nChannels, viewer, x, y, downsample);
                 if (diagnose) {
@@ -341,12 +386,9 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
             // --- Stage 6: Morphological Closing ---
             int kernelSize = WizardWandParameters.getMorphKernelSize();
             if (kernelSize > 0) {
-                // Ensure odd kernel size
-                if (kernelSize % 2 == 0)
-                    kernelSize++;
+                if (kernelSize % 2 == 0) kernelSize++;
                 if (strel == null || lastStrelSize != kernelSize) {
-                    if (strel != null)
-                        strel.close();
+                    if (strel != null) strel.close();
                     strel = opencv_imgproc.getStructuringElement(
                             opencv_imgproc.MORPH_ELLIPSE, new Size(kernelSize, kernelSize));
                     lastStrelSize = kernelSize;
@@ -356,19 +398,6 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
                     logMaskStats("afterMorph", radius);
                 }
             }
-
-            // Note: mask-level hole filling was removed. When the flood-fill
-            // disk is tangent to the mask edges (radius ~= W/2), the "outside
-            // the disk" region is split into four disconnected corners and the
-            // corner-flood-fill-from-(0,0) heuristic used by fillHoles(Mat)
-            // fails to identify the three non-TL corners as "external" --
-            // causing them to be classified as holes and filled back into the
-            // mask, producing the "top-left curved, three sides square"
-            // selection bug. Hole filling is now handled exclusively on the
-            // JTS geometry below via GeometryTools.removeInteriorRings /
-            // GeometryTools.fillHoles, which operates on proper polygonal
-            // holes (interior rings) and is correct by construction.
-
         }
 
         // --- Stage 8: Contour Extraction -> JTS Geometry ---
@@ -389,11 +418,8 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
                         String.format("%.3f", ratio));
             }
         }
-        if (geometry == null) {
-            if (firstUpdateOfStroke)
-                firstUpdateOfStroke = false;
+        if (geometry == null)
             return null;
-        }
 
         // --- Stage 9: Transform to Image Space ---
         var transform = new AffineTransformation()
@@ -407,10 +433,7 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
             return null;
 
         // --- Geometry-level Hole Filling ---
-        // Skip when the user is subtracting (Alt held). Subtracting is how the
-        // user deliberately cuts holes into an annotation, so auto hole-fill
-        // here would re-close every hole the user just made.
-        if (WizardWandParameters.getFillHoles() && !isSubtractMode(e)) {
+        if (WizardWandParameters.getFillHoles() && !subtractMode) {
             int minHoleSize = WizardWandParameters.getMinHoleSize();
             if (minHoleSize <= 0) {
                 geometry = GeometryTools.fillHoles(geometry);
@@ -420,7 +443,7 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
         }
 
         // --- Live Simplification ---
-        double tolerance = e.isShiftDown()
+        double tolerance = shiftDown
                 ? WizardWandParameters.getAggressiveSimplifyTolerance()
                 : WizardWandParameters.getSimplifyTolerance();
         if (tolerance > 0) {
@@ -433,24 +456,6 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
 
         long endTime = System.currentTimeMillis();
         logger.trace("{} time: {}ms", getClass().getSimpleName(), endTime - startTime);
-
-        if (diagnose) {
-            var env = geometry.getEnvelopeInternal();
-            double area = geometry.getArea();
-            double envArea = env.getWidth() * env.getHeight();
-            double ratio = envArea > 0 ? area / envArea : 0;
-            logger.debug("WizardWand[finalGeometry] area={} envelope=[{},{},{},{}] areaRatio={}",
-                    String.format("%.1f", area),
-                    String.format("%.1f", env.getMinX()), String.format("%.1f", env.getMinY()),
-                    String.format("%.1f", env.getMaxX()), String.format("%.1f", env.getMaxY()),
-                    String.format("%.3f", ratio));
-            firstUpdateOfStroke = false;
-        }
-
-        if (pLast == null)
-            pLast = new Point2D.Double(x, y);
-        else
-            pLast.setLocation(x, y);
 
         return geometry;
     }

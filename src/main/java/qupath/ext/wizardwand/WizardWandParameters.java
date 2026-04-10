@@ -106,29 +106,35 @@ public class WizardWandParameters {
 
     public static DoubleProperty sigmaProperty() { return sigma; }
     public static double getSigma() { return sigma.get(); }
+    public static void setSigma(double value) { sigma.set(value); }
 
     public static BooleanProperty useOverlaysProperty() { return useOverlays; }
     public static boolean getUseOverlays() { return useOverlays.get(); }
 
     public static BooleanProperty strictConnectivityProperty() { return strictConnectivity; }
     public static boolean getStrictConnectivity() { return strictConnectivity.get(); }
+    public static void setStrictConnectivity(boolean value) { strictConnectivity.set(value); }
     /** Returns 4 for strict connectivity, 8 for relaxed (default). */
     public static int getConnectivity() { return strictConnectivity.get() ? 4 : 8; }
 
     public static IntegerProperty morphKernelSizeProperty() { return morphKernelSize; }
     public static int getMorphKernelSize() { return morphKernelSize.get(); }
+    public static void setMorphKernelSize(int value) { morphKernelSize.set(value); }
 
     public static BooleanProperty fillHolesProperty() { return fillHoles; }
     public static boolean getFillHoles() { return fillHoles.get(); }
+    public static void setFillHoles(boolean value) { fillHoles.set(value); }
 
     public static IntegerProperty minHoleSizeProperty() { return minHoleSize; }
     public static int getMinHoleSize() { return minHoleSize.get(); }
 
     public static BooleanProperty edgeAwareProperty() { return edgeAware; }
     public static boolean getEdgeAware() { return edgeAware.get(); }
+    public static void setEdgeAware(boolean value) { edgeAware.set(value); }
 
     public static DoubleProperty edgeStrengthProperty() { return edgeStrength; }
     public static double getEdgeStrength() { return edgeStrength.get(); }
+    public static void setEdgeStrength(double value) { edgeStrength.set(value); }
 
     public static IntegerProperty edgePyramidOffsetProperty() { return edgePyramidOffset; }
     public static int getEdgePyramidOffset() {
@@ -208,5 +214,48 @@ public class WizardWandParameters {
         sensitivityMin.set(0.05);
         sensitivityMax.set(5.0);
         dwellSensitivityBoost.set(0.0);
+    }
+
+    // --- Snapshot for tuner save/restore ---
+
+    /**
+     * Immutable snapshot of all tunable parameters. Used by the tuner to
+     * save the user's current settings, mutate them during the search, and
+     * restore them unconditionally in a {@code finally} block.
+     */
+    record Snapshot(
+            WizardWandType wandType, double sensitivity, double sigma,
+            boolean useOverlays, boolean strictConnectivity, int morphKernelSize,
+            boolean fillHoles, int minHoleSize, boolean edgeAware,
+            double edgeStrength, double simplifyTolerance,
+            double aggressiveSimplifyTolerance, double dwellSensitivityBoost
+    ) {}
+
+    /** Capture a snapshot of every field the tuner may mutate. */
+    static Snapshot captureSnapshot() {
+        return new Snapshot(
+                getWandType(), getSensitivity(), getSigma(),
+                getUseOverlays(), getStrictConnectivity(), getMorphKernelSize(),
+                getFillHoles(), getMinHoleSize(), getEdgeAware(),
+                getEdgeStrength(), getSimplifyTolerance(),
+                getAggressiveSimplifyTolerance(), getDwellSensitivityBoost()
+        );
+    }
+
+    /** Restore all fields from a previously captured snapshot. */
+    static void applySnapshot(Snapshot s) {
+        wandType.set(s.wandType());
+        sensitivity.set(s.sensitivity());
+        sigma.set(s.sigma());
+        useOverlays.set(s.useOverlays());
+        strictConnectivity.set(s.strictConnectivity());
+        morphKernelSize.set(s.morphKernelSize());
+        fillHoles.set(s.fillHoles());
+        minHoleSize.set(s.minHoleSize());
+        edgeAware.set(s.edgeAware());
+        edgeStrength.set(s.edgeStrength());
+        simplifyTolerance.set(s.simplifyTolerance());
+        aggressiveSimplifyTolerance.set(s.aggressiveSimplifyTolerance());
+        dwellSensitivityBoost.set(s.dwellSensitivityBoost());
     }
 }
