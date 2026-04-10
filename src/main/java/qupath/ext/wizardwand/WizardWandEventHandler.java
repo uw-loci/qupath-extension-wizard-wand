@@ -373,13 +373,13 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
         Geometry geometry = extractContours(factory);
         if (diagnose) {
             if (geometry == null) {
-                logger.warn("WizardWand[extractContours] geometry=null");
+                logger.debug("WizardWand[extractContours] geometry=null");
             } else {
                 var env = geometry.getEnvelopeInternal();
                 double area = geometry.getArea();
                 double envArea = env.getWidth() * env.getHeight();
                 double ratio = envArea > 0 ? area / envArea : 0;
-                logger.warn("WizardWand[extractContours] geomType={} numGeoms={} area={} envelope=[{},{},{},{}] areaRatio={} (1.0=square, ~0.785=circle)",
+                logger.debug("WizardWand[extractContours] geomType={} numGeoms={} area={} envelope=[{},{},{},{}] areaRatio={} (1.0=square, ~0.785=circle)",
                         geometry.getGeometryType(), geometry.getNumGeometries(),
                         String.format("%.1f", area),
                         String.format("%.1f", env.getMinX()), String.format("%.1f", env.getMinY()),
@@ -436,7 +436,7 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
             double area = geometry.getArea();
             double envArea = env.getWidth() * env.getHeight();
             double ratio = envArea > 0 ? area / envArea : 0;
-            logger.warn("WizardWand[finalGeometry] area={} envelope=[{},{},{},{}] areaRatio={}",
+            logger.debug("WizardWand[finalGeometry] area={} envelope=[{},{},{},{}] areaRatio={}",
                     String.format("%.1f", area),
                     String.format("%.1f", env.getMinX()), String.format("%.1f", env.getMinY()),
                     String.format("%.1f", env.getMaxX()), String.format("%.1f", env.getMaxY()),
@@ -488,13 +488,16 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
     }
 
     /**
-     * Per-quadrant pixel count of the mask at a given pipeline stage, logged at WARN
-     * so the user sees it without reconfiguring logback. Counts zero vs non-zero
-     * pixels in each quadrant of the {@code matMask} (split at the disk center).
-     * If the disk is correctly set up, the four quadrants should have identical
-     * non-zero counts. Any asymmetry points at the stage that introduced the bug.
+     * Per-quadrant pixel count of the mask at a given pipeline stage, logged at
+     * DEBUG level (guarded so the full-mask scan is skipped when debug is off).
+     * Counts zero vs non-zero pixels in each quadrant of the {@code matMask}
+     * (split at the disk center). If the disk is correctly set up, the four
+     * quadrants should have identical non-zero counts. Any asymmetry points at
+     * the stage that introduced the bug.
      */
     private void logMaskStats(String stage, int radius) {
+        if (!logger.isDebugEnabled())
+            return;
         int cx = W / 2 + 1;
         int cy = W / 2 + 1;
         int[] nonzero = new int[4]; // TL, TR, BL, BR
@@ -514,7 +517,7 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
                 }
             }
         }
-        logger.warn("WizardWand[{}] r={} step={} nonzero/total TL={}/{} TR={}/{} BL={}/{} BR={}/{} sampleVal[TL,TR,BL,BR]=[{},{},{},{}]",
+        logger.debug("WizardWand[{}] r={} step={} nonzero/total TL={}/{} TR={}/{} BL={}/{} BR={}/{} sampleVal[TL,TR,BL,BR]=[{},{},{},{}]",
                 stage, radius, matMask.step(0),
                 nonzero[0], total[0],
                 nonzero[1], total[1],
@@ -803,12 +806,12 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
 
         if (firstUpdateOfStroke) {
             long nContours = contours.size();
-            logger.warn("WizardWand[findContours] count={}", nContours);
+            logger.debug("WizardWand[findContours] count={}", nContours);
             for (long i = 0; i < nContours; i++) {
                 var c = contours.get(i);
                 double area = opencv_imgproc.contourArea(c);
                 var bb = opencv_imgproc.boundingRect(c);
-                logger.warn("WizardWand[contour {}] points={} area={} bbox=[{},{} {}x{}]",
+                logger.debug("WizardWand[contour {}] points={} area={} bbox=[{},{} {}x{}]",
                         i, c.size().height(),
                         String.format("%.1f", area),
                         bb.x(), bb.y(), bb.width(), bb.height());

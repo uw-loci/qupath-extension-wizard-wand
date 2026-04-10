@@ -52,11 +52,12 @@ public class WizardWandParameters {
             PathPrefs.createPersistentPreference("wizardWandEdgeStrength", 0.5);
 
     // How many pyramid levels coarser to run edge detection. 0 = same level as
-    // the view (current behavior), 1 = 2x coarser, 2 = 4x coarser, etc.
-    // Higher values give more stable, structural edges that don't collapse into
-    // cellular texture when the user zooms in.
+    // the view, 1 = 2x coarser, 2 = 4x coarser, etc. Higher values give more
+    // stable, structural edges that don't collapse into cellular texture when
+    // the user zooms in. Key changed to force the new default on users who
+    // already had the pref set to 0 from the previous release.
     private static final IntegerProperty edgePyramidOffset =
-            PathPrefs.createPersistentPreference("wizardWandEdgePyramidOffset", 0);
+            PathPrefs.createPersistentPreference("wizardWandEdgePyramidOffsetV2", 2);
 
     // How edge barriers are thresholded. RELATIVE (default, backward-compatible)
     // uses (1 - edgeStrength) * maxGradient. ABSOLUTE uses (1 - edgeStrength) * 255
@@ -81,11 +82,6 @@ public class WizardWandParameters {
 
     private static final DoubleProperty dwellMaxBoost =
             PathPrefs.createPersistentPreference("wizardWandDwellMaxBoostV2", 3.0);
-
-    // Interpreted as a multiplicative factor: 0.15 = 15% change per scroll tick
-    // (newValue = current * 1.15 up, or current / 1.15 down)
-    private static final DoubleProperty scrollSensitivityStep =
-            PathPrefs.createPersistentPreference("wizardWandScrollFactorV3", 0.15);
 
     private static final DoubleProperty sensitivityMin =
             PathPrefs.createPersistentPreference("wizardWandSensitivityMinV2", 0.05);
@@ -160,9 +156,6 @@ public class WizardWandParameters {
     public static DoubleProperty dwellMaxBoostProperty() { return dwellMaxBoost; }
     public static double getDwellMaxBoost() { return dwellMaxBoost.get(); }
 
-    public static DoubleProperty scrollSensitivityStepProperty() { return scrollSensitivityStep; }
-    public static double getScrollSensitivityStep() { return scrollSensitivityStep.get(); }
-
     public static DoubleProperty sensitivityMinProperty() { return sensitivityMin; }
     public static double getSensitivityMin() { return sensitivityMin.get(); }
 
@@ -179,29 +172,6 @@ public class WizardWandParameters {
     public static double getEffectiveSensitivity() {
         return Math.max(getSensitivityMin(),
                 Math.min(getSensitivityMax(), getSensitivity() + getDwellSensitivityBoost()));
-    }
-
-    /**
-     * Adjust sensitivity by a scroll tick.
-     * Uses multiplicative adjustment so each tick produces a consistent
-     * relative change regardless of the current sensitivity value.
-     * <p>
-     * scrollSensitivityStep is interpreted as a fractional factor. For
-     * example, 0.15 means each tick changes by 15% (multiply or divide
-     * by 1.15). This gives intuitive fine control across the full range.
-     */
-    public static void adjustSensitivity(double delta) {
-        double current = getSensitivity();
-        double factor = 1.0 + Math.abs(getScrollSensitivityStep());
-        double newValue;
-        if (delta > 0) {
-            newValue = current * factor;
-        } else {
-            newValue = current / factor;
-        }
-        newValue = Math.max(getSensitivityMin(),
-                Math.min(getSensitivityMax(), newValue));
-        setSensitivity(newValue);
     }
 
     /**
@@ -227,14 +197,13 @@ public class WizardWandParameters {
         minHoleSize.set(100);
         edgeAware.set(false);
         edgeStrength.set(0.5);
-        edgePyramidOffset.set(0);
+        edgePyramidOffset.set(2);
         edgeNormalizationMode.set(EdgeNormalizationMode.RELATIVE);
         simplifyTolerance.set(0.5);
         aggressiveSimplifyTolerance.set(3.0);
         dwellDelay.set(300.0);
         dwellExpansionRate.set(0.5);
         dwellMaxBoost.set(3.0);
-        scrollSensitivityStep.set(0.15);
         sensitivityMin.set(0.05);
         sensitivityMax.set(5.0);
         dwellSensitivityBoost.set(0.0);

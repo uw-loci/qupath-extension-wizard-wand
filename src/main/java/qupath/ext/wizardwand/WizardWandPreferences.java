@@ -53,8 +53,7 @@ public class WizardWandPreferences {
                         + "Medium values (0.5-1.5): Balanced. Default is 1.0, slightly more "
                         + "generous than the built-in wand.\n"
                         + "High values (2.0+): Expansive selection. Use for quickly annotating "
-                        + "large, uniform regions like stroma or background.\n\n"
-                        + "Tip: Scroll the mouse wheel while drawing to adjust this in real-time.")
+                        + "large, uniform regions like stroma or background.")
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.sigmaProperty(), Double.class)
@@ -152,20 +151,22 @@ public class WizardWandPreferences {
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.edgePyramidOffsetProperty(), Integer.class)
-                .name("Edge pyramid offset")
+                .name("Edge pyramid level")
                 .category(CATEGORY)
-                .description("How many pyramid levels COARSER than the current view to run "
-                        + "edge detection. Makes edges behave consistently across zoom levels.\n\n"
-                        + "0 (default): Same level as view. Edges reflect whatever is visible, "
-                        + "which means small cellular features become barriers when zoomed in.\n"
-                        + "1: One level coarser (2x downsample). Probes slightly broader features.\n"
-                        + "2-3: Two to three levels coarser. Picks up major tissue boundaries "
-                        + "regardless of current zoom. Good for ignoring cellular texture and "
-                        + "selecting based on broad tissue structures.\n"
+                .description("Controls how much fine detail the edge detector ignores. "
+                        + "Higher values sample edges from a coarser pyramid level, "
+                        + "which makes the wand less sensitive to sub-cellular texture "
+                        + "when zoomed in. Measured in pyramid-levels-coarser-than-the-view.\n\n"
+                        + "0: Edges computed at the current zoom level. Picks up every "
+                        + "visible detail -- including noisy cellular texture when zoomed in.\n"
+                        + "1: One level coarser (2x downsample). Slightly broader features.\n"
+                        + "2 (default): Two levels coarser (4x). Good balance -- ignores "
+                        + "cellular noise, keeps tissue boundaries.\n"
+                        + "3: Three levels coarser (8x). Only major tissue structure.\n"
                         + "4: Maximum. Very coarse structural edges only.\n\n"
-                        + "Higher offsets give more stable, structural barriers. When you zoom "
-                        + "in, the same tissue contours still act as walls instead of being "
-                        + "replaced by noisy cellular edges.")
+                        + "Use 0 when you want the wand to honor every edge you can see. "
+                        + "Use 2-3 for the typical pathology case where you want the wand "
+                        + "to follow tissue boundaries and ignore cellular texture.")
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.edgeNormalizationModeProperty(),
@@ -237,33 +238,20 @@ public class WizardWandPreferences {
                         + "Lower values (3.0-5.0): Limits expansion for finer control.")
                 .build());
 
-        items.add(new PropertyItemBuilder<>(WizardWandParameters.scrollSensitivityStepProperty(), Double.class)
-                .name("Scroll factor")
-                .category(CATEGORY)
-                .description("Relative change per scroll tick (multiplicative). Each tick "
-                        + "multiplies or divides sensitivity by (1 + this value).\n\n"
-                        + "0.05: 5% change per tick. Very fine control.\n"
-                        + "0.15: 15% change per tick. Default -- balanced.\n"
-                        + "0.30: 30% change per tick. Coarser, faster adjustment.\n\n"
-                        + "Multiplicative scrolling gives consistent relative changes "
-                        + "regardless of the current sensitivity, so small values near "
-                        + "the interesting range still get fine control.")
-                .build());
-
         items.add(new PropertyItemBuilder<>(WizardWandParameters.sensitivityMinProperty(), Double.class)
                 .name("Sensitivity min")
                 .category(CATEGORY)
-                .description("Lower bound for sensitivity. Scroll wheel and dwell cannot go below this.\n"
-                        + "Default: 0.25")
+                .description("Lower bound for sensitivity. Dwell expansion cannot go below this.\n"
+                        + "Default: 0.05")
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.sensitivityMaxProperty(), Double.class)
                 .name("Sensitivity max")
                 .category(CATEGORY)
-                .description("Upper bound for sensitivity. Scroll wheel and dwell cannot exceed this.\n"
-                        + "Default: 15.0")
+                .description("Upper bound for sensitivity. Dwell expansion cannot exceed this.\n"
+                        + "Default: 5.0")
                 .build());
 
-        logger.info("Wizard Wand preferences installed ({} items)", 18);
+        logger.info("Wizard Wand preferences installed");
     }
 }

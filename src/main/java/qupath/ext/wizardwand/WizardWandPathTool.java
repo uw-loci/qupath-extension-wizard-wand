@@ -8,35 +8,31 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.scene.Node;
 import javafx.scene.input.MouseEvent;
-import javafx.scene.input.ScrollEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.gui.viewer.tools.PathTool;
 
 /**
- * Custom PathTool implementation that registers both mouse and scroll event handlers.
+ * Custom PathTool implementation that registers the wand mouse event handler.
  * <p>
- * The standard {@code PathTools.createTool()} only supports MouseEvent handlers.
- * This custom implementation adds a ScrollEvent filter for mid-draw sensitivity
- * adjustment via the mouse wheel.
+ * The standard {@code PathTools.createTool()} creates a tool that is identical
+ * in behavior; we keep this thin wrapper so that the tool lifecycle (register /
+ * deregister) can reset the wand's drawing state and dwell timer cleanly.
  */
 public class WizardWandPathTool implements PathTool {
 
     private static final Logger logger = LoggerFactory.getLogger(WizardWandPathTool.class);
 
     private final WizardWandEventHandler mouseHandler;
-    private final WizardWandScrollHandler scrollHandler;
     private final StringProperty name;
     private final ObjectProperty<Node> icon;
     private QuPathViewer viewer;
 
     public WizardWandPathTool(WizardWandEventHandler mouseHandler,
-                              WizardWandScrollHandler scrollHandler,
                               String name,
                               Node icon) {
         this.mouseHandler = mouseHandler;
-        this.scrollHandler = scrollHandler;
         this.name = new SimpleStringProperty(name);
         this.icon = new SimpleObjectProperty<>(icon);
     }
@@ -53,8 +49,6 @@ public class WizardWandPathTool implements PathTool {
             logger.trace("Registering Wizard Wand tool on viewer {}", viewer);
             Node canvas = viewer.getView();
             canvas.addEventHandler(MouseEvent.ANY, mouseHandler);
-            // Use event FILTER for scroll so we fire before the zoom handler
-            canvas.addEventFilter(ScrollEvent.SCROLL, scrollHandler);
         }
     }
 
@@ -65,7 +59,6 @@ public class WizardWandPathTool implements PathTool {
             this.viewer = null;
             Node canvas = viewer.getView();
             canvas.removeEventHandler(MouseEvent.ANY, mouseHandler);
-            canvas.removeEventFilter(ScrollEvent.SCROLL, scrollHandler);
             // Reset all drawing state (dwell timer, flags, stale events)
             mouseHandler.resetDrawingState();
         }

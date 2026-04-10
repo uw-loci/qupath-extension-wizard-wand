@@ -35,8 +35,8 @@ public class WizardWandExtension implements QuPathExtension {
 
     @Override
     public String getDescription() {
-        return "Enhanced wand tool with scroll-wheel sensitivity, dwell expansion, "
-                + "live smoothing, edge-aware selection, and more.";
+        return "Enhanced wand tool with dwell expansion, live smoothing, "
+                + "edge-aware selection, and more.";
     }
 
     @Override
@@ -65,14 +65,13 @@ public class WizardWandExtension implements QuPathExtension {
 
             // Create the tool components
             var eventHandler = new WizardWandEventHandler();
-            var scrollHandler = new WizardWandScrollHandler(eventHandler);
 
             // Use FontAwesome MAGIC glyph (wand with sparkles) to distinguish
             // from the built-in wand tool which uses icoMoon wand glyph
             var icon = createWizardWandIcon(QuPathGUI.TOOLBAR_ICON_SIZE);
 
             PathTool wizardWandTool = new WizardWandPathTool(
-                    eventHandler, scrollHandler, "Wizard Wand", icon);
+                    eventHandler, "Wizard Wand", icon);
 
             logger.debug("Installing Wizard Wand tool");
             Platform.runLater(() -> {
@@ -81,7 +80,6 @@ public class WizardWandExtension implements QuPathExtension {
                 qupath.getToolManager().getToolAction(wizardWandTool).setLongText(String.format(
                         """
                         (%s) Click and drag to draw with the Wizard Wand tool.
-                        Scroll wheel while drawing to adjust sensitivity.
                         Hold still to expand selection (dwell).
                         Hold Shift while dragging for smooth annotations.
                         Right-click toolbar button for presets and options.
