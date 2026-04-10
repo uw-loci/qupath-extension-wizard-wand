@@ -355,13 +355,17 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
                 }
             }
 
-            // --- Stage 7: Hole Filling ---
-            if (WizardWandParameters.getFillHoles()) {
-                fillHoles(matMask);
-                if (diagnose) {
-                    logMaskStats("afterFillHoles", radius);
-                }
-            }
+            // Note: mask-level hole filling was removed. When the flood-fill
+            // disk is tangent to the mask edges (radius ~= W/2), the "outside
+            // the disk" region is split into four disconnected corners and the
+            // corner-flood-fill-from-(0,0) heuristic used by fillHoles(Mat)
+            // fails to identify the three non-TL corners as "external" --
+            // causing them to be classified as holes and filled back into the
+            // mask, producing the "top-left curved, three sides square"
+            // selection bug. Hole filling is now handled exclusively on the
+            // JTS geometry below via GeometryTools.removeInteriorRings /
+            // GeometryTools.fillHoles, which operates on proper polygonal
+            // holes (interior rings) and is correct by construction.
 
         }
 
@@ -783,55 +787,6 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
         } finally {
             if (closeEdgeSource && edgeSource != null)
                 edgeSource.close();
-        }
-    }
-
-    /**
-     * Stage 7: Fill enclosed holes in the mask using flood-fill from corner technique.
-     * Only fills holes smaller than the configured minimum hole size.
-     */
-    private void fillHoles(Mat mask) {
-        int minHoleSize = WizardWandParameters.getMinHoleSize();
-
-        // The mask is (W+2) x (W+2). Work on the inner region.
-        // Strategy: flood fill from corner of an inverted copy.
-        // Pixels NOT reached by the fill are interior holes.
-        try (Mat inverted = new Mat(); Mat cornerFill = new Mat()) {
-            // Invert the mask: foreground (1) -> 0, background (0) -> 1
-            opencv_core.bitwise_not(mask, inverted);
-
-            // Flood fill from (0,0) on the inverted mask to find the external background
-            inverted.copyTo(cornerFill);
-            try (Mat fillMask = new Mat(mask.rows() + 2, mask.cols() + 2, CV_8UC1)) {
-                fillMask.put(Scalar.ZERO);
-                opencv_imgproc.floodFill(cornerFill, fillMask, new Point(0, 0), new Scalar(0));
-            }
-
-            // cornerFill now has 0 where the external background was, and non-zero for holes
-            // If minHoleSize > 0, we need to check hole sizes before filling
-            if (minHoleSize > 0) {
-                try (MatVector holeContours = new MatVector(); Mat holeHierarchy = new Mat()) {
-                    opencv_imgproc.findContours(cornerFill, holeContours, holeHierarchy,
-                            opencv_imgproc.RETR_EXTERNAL, opencv_imgproc.CHAIN_APPROX_SIMPLE);
-                    for (Mat contour : holeContours.get()) {
-                        double area = opencv_imgproc.contourArea(contour);
-                        if (area < minHoleSize) {
-                            // Fill this small hole in the original mask
-                            try (MatVector single = new MatVector(1)) {
-                                single.put(0, contour);
-                                opencv_imgproc.drawContours(mask, single, 0,
-                                        Scalar.all(1), opencv_imgproc.FILLED,
-                                        opencv_imgproc.LINE_8, emptyMat, Integer.MAX_VALUE,
-                                        new Point(0, 0));
-                            }
-                        }
-                    }
-                    holeContours.close();
-                }
-            } else {
-                // Fill ALL holes: OR the hole mask with the original
-                opencv_core.bitwise_or(mask, cornerFill, mask);
-            }
         }
     }
 
