@@ -184,8 +184,10 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
 
         // Apply final hole filling to the complete annotation before committing.
         // This catches holes formed by union of multiple drag strokes that
-        // the per-stroke fill in createShape() cannot prevent.
-        if (WizardWandParameters.getFillHoles()) {
+        // the per-stroke fill in createShape() cannot prevent. Skipped when
+        // Alt is held (subtract mode) so holes the user deliberately carved
+        // out aren't re-closed on release.
+        if (WizardWandParameters.getFillHoles() && !isSubtractMode(e)) {
             var viewer = getViewer();
             if (viewer != null) {
                 var selected = viewer.getSelectedObject();
@@ -405,9 +407,10 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
             return null;
 
         // --- Geometry-level Hole Filling ---
-        // This catches holes that the mask-level fill misses, including holes
-        // formed during geometry union operations when dragging
-        if (WizardWandParameters.getFillHoles()) {
+        // Skip when the user is subtracting (Alt held). Subtracting is how the
+        // user deliberately cuts holes into an annotation, so auto hole-fill
+        // here would re-close every hole the user just made.
+        if (WizardWandParameters.getFillHoles() && !isSubtractMode(e)) {
             int minHoleSize = WizardWandParameters.getMinHoleSize();
             if (minHoleSize <= 0) {
                 geometry = GeometryTools.fillHoles(geometry);
