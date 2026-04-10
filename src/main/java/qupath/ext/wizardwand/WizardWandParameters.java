@@ -19,12 +19,11 @@ public class WizardWandParameters {
     private static final ObjectProperty<WizardWandType> wandType =
             PathPrefs.createPersistentPreference("wizardWandType", WizardWandType.RGB, WizardWandType.class);
 
-    // Key changed from "wizardWandSensitivity" to force new default after formula change.
     // Formula: threshold = stddev * sensitivity.
-    // Default 0.6 is in the middle of the typically-useful range (0.4-1.0) based
-    // on testing. Users can scroll-wheel to adjust while drawing.
+    // Default 0.5 matches the built-in wand (which uses stddev / 2.0 at its
+    // default sensitivity of 2.0). Key versioned to force new default.
     private static final DoubleProperty sensitivity =
-            PathPrefs.createPersistentPreference("wizardWandSensitivityV3", 0.6);
+            PathPrefs.createPersistentPreference("wizardWandSensitivityV4", 0.5);
 
     private static final DoubleProperty sigma =
             PathPrefs.createPersistentPreference("wizardWandSigma", 4.0);
@@ -32,9 +31,9 @@ public class WizardWandParameters {
     private static final BooleanProperty useOverlays =
             PathPrefs.createPersistentPreference("wizardWandUseOverlays", true);
 
-    // true = strict 4-connectivity (edges only), false = relaxed 8-connectivity (default, includes diagonals)
+    // true = strict 4-connectivity (edges only, matches built-in wand), false = relaxed 8-connectivity
     private static final BooleanProperty strictConnectivity =
-            PathPrefs.createPersistentPreference("wizardWandStrictConnectivity", false);
+            PathPrefs.createPersistentPreference("wizardWandStrictConnectivityV2", true);
 
     private static final IntegerProperty morphKernelSize =
             PathPrefs.createPersistentPreference("wizardWandMorphKernelSize", 5);
@@ -43,7 +42,7 @@ public class WizardWandParameters {
             PathPrefs.createPersistentPreference("wizardWandFillHoles", true);
 
     private static final IntegerProperty minHoleSize =
-            PathPrefs.createPersistentPreference("wizardWandMinHoleSize", 100);
+            PathPrefs.createPersistentPreference("wizardWandMinHoleSizeV2", 10000);
 
     private static final BooleanProperty edgeAware =
             PathPrefs.createPersistentPreference("wizardWandEdgeAware", false);
@@ -66,8 +65,10 @@ public class WizardWandParameters {
             PathPrefs.createPersistentPreference("wizardWandEdgeNormalizationMode",
                     EdgeNormalizationMode.RELATIVE, EdgeNormalizationMode.class);
 
+    // 0 = no always-on simplification (matches built-in wand). Shift-mode
+    // aggressive simplification still applies when held.
     private static final DoubleProperty simplifyTolerance =
-            PathPrefs.createPersistentPreference("wizardWandSimplifyTolerance", 0.5);
+            PathPrefs.createPersistentPreference("wizardWandSimplifyToleranceV2", 0.0);
 
     private static final DoubleProperty aggressiveSimplifyTolerance =
             PathPrefs.createPersistentPreference("wizardWandAggressiveSimplifyTolerance", 3.0);
@@ -188,18 +189,18 @@ public class WizardWandParameters {
      */
     public static void resetDefaults() {
         wandType.set(WizardWandType.RGB);
-        sensitivity.set(0.6);
+        sensitivity.set(0.5);
         sigma.set(4.0);
         useOverlays.set(true);
-        strictConnectivity.set(false);
+        strictConnectivity.set(true);
         morphKernelSize.set(5);
         fillHoles.set(true);
-        minHoleSize.set(100);
+        minHoleSize.set(10000);
         edgeAware.set(false);
         edgeStrength.set(0.5);
         edgePyramidOffset.set(2);
         edgeNormalizationMode.set(EdgeNormalizationMode.RELATIVE);
-        simplifyTolerance.set(0.5);
+        simplifyTolerance.set(0.0);
         aggressiveSimplifyTolerance.set(3.0);
         dwellDelay.set(300.0);
         dwellExpansionRate.set(0.5);
