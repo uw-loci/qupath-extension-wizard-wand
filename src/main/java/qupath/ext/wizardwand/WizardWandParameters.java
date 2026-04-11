@@ -4,7 +4,9 @@ import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.ObjectProperty;
-import javafx.beans.property.SimpleDoubleProperty; // Used for transient dwellSensitivityBoost
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleDoubleProperty;
+import javafx.beans.property.SimpleIntegerProperty;
 import qupath.lib.gui.prefs.PathPrefs;
 
 /**
@@ -84,11 +86,18 @@ public class WizardWandParameters {
     private static final DoubleProperty dwellMaxBoost =
             PathPrefs.createPersistentPreference("wizardWandDwellMaxBoostV2", 3.0);
 
-    private static final DoubleProperty sensitivityMin =
-            PathPrefs.createPersistentPreference("wizardWandSensitivityMinV2", 0.05);
+    // --- Fixed downsample (zoom-independent wand) ---
 
-    private static final DoubleProperty sensitivityMax =
-            PathPrefs.createPersistentPreference("wizardWandSensitivityMaxV2", 5.0);
+    private static final BooleanProperty fixedDownsample =
+            PathPrefs.createPersistentPreference("wizardWandFixedDownsample", false);
+
+    private static final DoubleProperty fixedDownsampleLevel =
+            PathPrefs.createPersistentPreference("wizardWandFixedDownsampleLevel", 1.0);
+
+    // --- Enhanced brush handler (opt-in fork of BrushToolEventHandler) ---
+
+    private static final BooleanProperty useEnhancedBrushHandler =
+            PathPrefs.createPersistentPreference("wizardWandUseEnhancedBrushHandler", false);
 
     // --- Transient state (reset per drawing operation, not persisted) ---
 
@@ -168,11 +177,14 @@ public class WizardWandParameters {
     public static DoubleProperty dwellMaxBoostProperty() { return dwellMaxBoost; }
     public static double getDwellMaxBoost() { return dwellMaxBoost.get(); }
 
-    public static DoubleProperty sensitivityMinProperty() { return sensitivityMin; }
-    public static double getSensitivityMin() { return sensitivityMin.get(); }
+    public static BooleanProperty fixedDownsampleProperty() { return fixedDownsample; }
+    public static boolean getFixedDownsample() { return fixedDownsample.get(); }
 
-    public static DoubleProperty sensitivityMaxProperty() { return sensitivityMax; }
-    public static double getSensitivityMax() { return sensitivityMax.get(); }
+    public static DoubleProperty fixedDownsampleLevelProperty() { return fixedDownsampleLevel; }
+    public static double getFixedDownsampleLevel() { return fixedDownsampleLevel.get(); }
+
+    public static BooleanProperty useEnhancedBrushHandlerProperty() { return useEnhancedBrushHandler; }
+    public static boolean getUseEnhancedBrushHandler() { return useEnhancedBrushHandler.get(); }
 
     public static DoubleProperty dwellSensitivityBoostProperty() { return dwellSensitivityBoost; }
     public static double getDwellSensitivityBoost() { return dwellSensitivityBoost.get(); }
@@ -184,11 +196,11 @@ public class WizardWandParameters {
     public static void clearDwellDownsampleOverride() { dwellDownsampleOverride.set(Double.NaN); }
 
     /**
-     * Get the effective sensitivity (base + dwell boost), clamped to valid range.
+     * Get the effective sensitivity (base + dwell boost), clamped to safe bounds.
      */
     public static double getEffectiveSensitivity() {
-        return Math.max(getSensitivityMin(),
-                Math.min(getSensitivityMax(), getSensitivity() + getDwellSensitivityBoost()));
+        double eff = getSensitivity() + getDwellSensitivityBoost();
+        return Math.max(0.01, Math.min(20.0, eff));
     }
 
     /**
@@ -221,8 +233,9 @@ public class WizardWandParameters {
         dwellDelay.set(300.0);
         dwellExpansionRate.set(0.5);
         dwellMaxBoost.set(3.0);
-        sensitivityMin.set(0.05);
-        sensitivityMax.set(5.0);
+        fixedDownsample.set(false);
+        fixedDownsampleLevel.set(1.0);
+        useEnhancedBrushHandler.set(false);
         dwellSensitivityBoost.set(0.0);
         dwellDownsampleOverride.set(Double.NaN);
     }

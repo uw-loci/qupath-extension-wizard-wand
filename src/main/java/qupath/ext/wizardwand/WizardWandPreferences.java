@@ -87,8 +87,11 @@ public class WizardWandPreferences {
                 .description("When checked, uses 4-connectivity (horizontal/vertical neighbors only). "
                         + "Produces more angular selections that won't leak through thin diagonal gaps. "
                         + "Use when structures have thin boundaries the selection keeps crossing.\n\n"
-                        + "When unchecked (default), uses 8-connectivity which also includes diagonal "
-                        + "neighbors. Produces smoother, rounder selections that fill corners better.")
+                        + "When unchecked, uses 8-connectivity which also includes diagonal "
+                        + "neighbors. Produces smoother, rounder selections that fill corners better.\n\n"
+                        + "Note: the visual difference between 4 and 8 connectivity is most apparent "
+                        + "with low Gaussian sigma and Smoothing set to 0. With default settings, "
+                        + "the blur and morphological closing smooth away the small boundary differences.")
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.morphKernelSizeProperty(), Integer.class)
@@ -241,23 +244,43 @@ public class WizardWandPreferences {
                         + "Lower values (1.0-2.0): Minimal expansion, refinement starts sooner.")
                 .build());
 
-        items.add(new PropertyItemBuilder<>(WizardWandParameters.sensitivityMinProperty(), Double.class)
-                .name("Sensitivity min")
+        // --- Fixed downsample (zoom-independent wand) ---
+
+        items.add(new PropertyItemBuilder<>(WizardWandParameters.fixedDownsampleProperty(), Boolean.class)
+                .name("Lock wand resolution")
                 .category(CATEGORY)
-                .description("Floor for the effective sensitivity (base + dwell boost). "
-                        + "During dwell expansion, the effective sensitivity grows from the "
-                        + "base Sensitivity value up to Sensitivity + Dwell max boost. This "
-                        + "floor prevents it from going below a usable level.\n\n"
-                        + "Default: 0.05")
+                .description("When checked, the wand always operates at a fixed resolution level "
+                        + "regardless of the current zoom. This lets you zoom in and out to "
+                        + "navigate without changing how the wand selects.\n\n"
+                        + "When unchecked (default), the wand adapts to the current zoom level "
+                        + "(the standard behavior). Zooming out makes the wand cover more ground "
+                        + "but use coarser image data.")
                 .build());
 
-        items.add(new PropertyItemBuilder<>(WizardWandParameters.sensitivityMaxProperty(), Double.class)
-                .name("Sensitivity max")
+        items.add(new PropertyItemBuilder<>(WizardWandParameters.fixedDownsampleLevelProperty(), Double.class)
+                .name("Wand resolution level")
                 .category(CATEGORY)
-                .description("Ceiling for the effective sensitivity (base + dwell boost). "
-                        + "Even with maximum dwell expansion, the effective sensitivity "
-                        + "will not exceed this value. Prevents runaway selection growth.\n\n"
-                        + "Default: 5.0")
+                .description("The downsample level the wand uses when 'Lock wand resolution' is "
+                        + "checked. Lower values = finer detail (more zoomed in). Only has an "
+                        + "effect when the lock is enabled.\n\n"
+                        + "1.0: Full resolution (as if fully zoomed in).\n"
+                        + "4.0: 4x downsampled (typical 10x objective view).\n"
+                        + "16.0: 16x downsampled (overview level).")
+                .build());
+
+        // --- Enhanced brush handler (opt-in) ---
+
+        items.add(new PropertyItemBuilder<>(WizardWandParameters.useEnhancedBrushHandlerProperty(), Boolean.class)
+                .name("Enhanced brush handler")
+                .category(CATEGORY)
+                .description("Enables a reimplemented brush handler that provides mid-drag hole "
+                        + "filling, mid-drag island removal (Alt+subtract), and custom "
+                        + "simplification during drawing -- not just on mouse release.\n\n"
+                        + "When unchecked (default), uses QuPath's built-in brush handler. "
+                        + "Holes and islands are cleaned up only when you release the mouse.\n\n"
+                        + "When checked, holes are filled and islands removed on every drag "
+                        + "step, giving immediate visual feedback. Uses a reimplemented "
+                        + "version of QuPath's brush pipeline.")
                 .build());
 
         logger.info("Wizard Wand preferences installed");

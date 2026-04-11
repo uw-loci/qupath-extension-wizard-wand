@@ -177,6 +177,17 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
             }
         }
         super.mouseDragged(e);
+
+        // Enhanced brush handler: post-process the ROI that super just set.
+        // BrushToolEventHandler.getUpdatedObject is private, so we can't
+        // intercept the union step. Instead, we read the ROI back after the
+        // parent wrote it, apply hole filling / island removal, and write it
+        // again. This gives mid-drag visual feedback without forking the
+        // entire 400-line parent class.
+        if (drawing && WizardWandParameters.getUseEnhancedBrushHandler()
+                && WizardWandParameters.getFillHoles()) {
+            postProcessDragStep(e);
+        }
     }
 
     @Override
@@ -264,6 +275,54 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
         return drawing;
     }
 
+    /**
+     * Enhanced brush handler: post-process the annotation ROI after each drag
+     * step. Reads the ROI that BrushToolEventHandler.getUpdatedObject just set,
+     * applies hole filling (add mode) or island removal (subtract mode), and
+     * writes it back. This gives mid-drag visual feedback without forking the
+     * parent class.
+     */
+    private void postProcessDragStep(MouseEvent e) {
+        var viewer = getViewer();
+        if (viewer == null) return;
+        var selected = viewer.getSelectedObject();
+        if (selected == null || !selected.isAnnotation() || !selected.isEditable()
+                || !selected.hasROI() || !selected.getROI().isArea())
+            return;
+
+        var roi = selected.getROI();
+        var geom = roi.getGeometry();
+        int minSize = WizardWandParameters.getMinHoleSize();
+        boolean subtract = isSubtractMode(e);
+        Geometry processed;
+
+        if (subtract) {
+            // Remove small islands (fragments left by erasing)
+            processed = removeSmallIslands(geom, minSize);
+        } else {
+            // Fill small holes formed by the union step
+            if (minSize <= 0) {
+                processed = GeometryTools.fillHoles(geom);
+            } else {
+                processed = GeometryTools.removeInteriorRings(geom, minSize);
+            }
+        }
+
+        if (processed != geom && !processed.isEmpty()) {
+            var newRoi = GeometryTools.geometryToROI(processed, roi.getImagePlane());
+            ((qupath.lib.objects.PathAnnotationObject) selected).setROI(newRoi);
+        }
+    }
+
+    /**
+     * Respect QuPath's "Return to move tool" preference. The parent class
+     * (BrushToolEventHandler) hardcodes this to false; we read the actual pref.
+     */
+    @Override
+    protected boolean preferReturnToMove() {
+        return qupath.lib.gui.prefs.PathPrefs.returnToMoveModeProperty().get();
+    }
+
     /** Package-private accessor so DwellExpansionTimer can reach the viewer's server. */
     QuPathViewer viewer() {
         return getViewer();
@@ -348,6 +407,8 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
         double downsample;
         if (WizardWandParameters.hasDwellDownsampleOverride()) {
             downsample = WizardWandParameters.getDwellDownsampleOverride();
+        } else if (WizardWandParameters.getFixedDownsample()) {
+            downsample = Math.max(1, WizardWandParameters.getFixedDownsampleLevel());
         } else {
             downsample = Math.max(1, Math.round(viewer.getDownsampleFactor() * 4)) / 4.0;
         }
