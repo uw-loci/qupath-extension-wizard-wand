@@ -245,6 +245,7 @@ public class WizardWandExtension implements QuPathExtension {
                     javafx.scene.control.ButtonType.CANCEL);
             confirm.setHeaderText("Reset Wizard Wand preferences");
             confirm.setTitle("Wizard Wand");
+            confirm.getDialogPane().setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
             confirm.showAndWait().ifPresent(result -> {
                 if (result == javafx.scene.control.ButtonType.OK) {
                     WizardWandParameters.resetDefaults();
