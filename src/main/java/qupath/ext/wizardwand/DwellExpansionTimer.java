@@ -38,10 +38,9 @@ public class DwellExpansionTimer extends AnimationTimer {
     /** Wand sampling window size (must match WizardWandEventHandler.W) */
     private static final int W = 149;
 
-    /** Maximum source pixels to request in one capture (2048^2 ~= 16M px, ~48 MB RGB) */
-    private static final long MAX_CAPTURE_PIXELS = 2048L * 2048L;
-
-    /** Maximum pyramid levels to step finer than the viewer's current level */
+    /** Maximum pyramid levels to step finer than the viewer's current level.
+     *  The server's own pyramid structure ensures each level is efficiently
+     *  loadable, so 2 steps is safe at any zoom level. */
     private static final int MAX_REFINEMENT_STEPS = 2;
 
     /** Milliseconds between each pyramid refinement step */
@@ -170,13 +169,6 @@ public class DwellExpansionTimer extends AnimationTimer {
 
         // Already at the finest available level?
         if (fineDs >= viewDs) {
-            return;
-        }
-
-        // Pixel budget check
-        long pixels = (long) (W * fineDs) * (long) (W * fineDs);
-        if (pixels > MAX_CAPTURE_PIXELS) {
-            logger.debug("Pyramid refinement skipped: {} px exceeds budget {}", pixels, MAX_CAPTURE_PIXELS);
             return;
         }
 

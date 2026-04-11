@@ -233,22 +233,30 @@ public class WizardWandPreferences {
                 .name("Dwell max boost")
                 .category(CATEGORY)
                 .description("Maximum sensitivity increase from dwell expansion. Caps how far "
-                        + "the selection can grow by holding still.\n\n"
-                        + "Default (10.0): Allows substantial expansion.\n"
-                        + "Lower values (3.0-5.0): Limits expansion for finer control.")
+                        + "the selection can grow by holding still. After the boost hits this "
+                        + "cap, Phase 2 (pyramid refinement) begins -- the wand starts using "
+                        + "finer image data to trace edges more accurately.\n\n"
+                        + "Default (3.0): Moderate expansion before refinement starts.\n"
+                        + "Higher values (5.0-10.0): More expansion before edges sharpen.\n"
+                        + "Lower values (1.0-2.0): Minimal expansion, refinement starts sooner.")
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.sensitivityMinProperty(), Double.class)
                 .name("Sensitivity min")
                 .category(CATEGORY)
-                .description("Lower bound for sensitivity. Dwell expansion cannot go below this.\n"
+                .description("Floor for the effective sensitivity (base + dwell boost). "
+                        + "During dwell expansion, the effective sensitivity grows from the "
+                        + "base Sensitivity value up to Sensitivity + Dwell max boost. This "
+                        + "floor prevents it from going below a usable level.\n\n"
                         + "Default: 0.05")
                 .build());
 
         items.add(new PropertyItemBuilder<>(WizardWandParameters.sensitivityMaxProperty(), Double.class)
                 .name("Sensitivity max")
                 .category(CATEGORY)
-                .description("Upper bound for sensitivity. Dwell expansion cannot exceed this.\n"
+                .description("Ceiling for the effective sensitivity (base + dwell boost). "
+                        + "Even with maximum dwell expansion, the effective sensitivity "
+                        + "will not exceed this value. Prevents runaway selection growth.\n\n"
                         + "Default: 5.0")
                 .build());
 
