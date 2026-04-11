@@ -94,6 +94,11 @@ public class WizardWandParameters {
 
     private static final DoubleProperty dwellSensitivityBoost = new SimpleDoubleProperty(0.0);
 
+    // Set by DwellExpansionTimer during Phase 2 (pyramid refinement).
+    // NaN means "use the viewer's downsample" (default). A finite value
+    // overrides the downsample used by computeShapeAt.
+    private static final DoubleProperty dwellDownsampleOverride = new SimpleDoubleProperty(Double.NaN);
+
     // --- Property accessors ---
 
     public static ObjectProperty<WizardWandType> wandTypeProperty() { return wandType; }
@@ -173,6 +178,11 @@ public class WizardWandParameters {
     public static double getDwellSensitivityBoost() { return dwellSensitivityBoost.get(); }
     public static void setDwellSensitivityBoost(double value) { dwellSensitivityBoost.set(value); }
 
+    public static boolean hasDwellDownsampleOverride() { return !Double.isNaN(dwellDownsampleOverride.get()); }
+    public static double getDwellDownsampleOverride() { return dwellDownsampleOverride.get(); }
+    public static void setDwellDownsampleOverride(double d) { dwellDownsampleOverride.set(d); }
+    public static void clearDwellDownsampleOverride() { dwellDownsampleOverride.set(Double.NaN); }
+
     /**
      * Get the effective sensitivity (base + dwell boost), clamped to valid range.
      */
@@ -214,6 +224,7 @@ public class WizardWandParameters {
         sensitivityMin.set(0.05);
         sensitivityMax.set(5.0);
         dwellSensitivityBoost.set(0.0);
+        dwellDownsampleOverride.set(Double.NaN);
     }
 
     // --- Snapshot for tuner save/restore ---
@@ -228,7 +239,8 @@ public class WizardWandParameters {
             boolean useOverlays, boolean strictConnectivity, int morphKernelSize,
             boolean fillHoles, int minHoleSize, boolean edgeAware,
             double edgeStrength, double simplifyTolerance,
-            double aggressiveSimplifyTolerance, double dwellSensitivityBoost
+            double aggressiveSimplifyTolerance, double dwellSensitivityBoost,
+            double dwellDownsampleOverride
     ) {}
 
     /** Capture a snapshot of every field the tuner may mutate. */
@@ -238,7 +250,8 @@ public class WizardWandParameters {
                 getUseOverlays(), getStrictConnectivity(), getMorphKernelSize(),
                 getFillHoles(), getMinHoleSize(), getEdgeAware(),
                 getEdgeStrength(), getSimplifyTolerance(),
-                getAggressiveSimplifyTolerance(), getDwellSensitivityBoost()
+                getAggressiveSimplifyTolerance(), getDwellSensitivityBoost(),
+                dwellDownsampleOverride.get()
         );
     }
 
@@ -257,5 +270,6 @@ public class WizardWandParameters {
         simplifyTolerance.set(s.simplifyTolerance());
         aggressiveSimplifyTolerance.set(s.aggressiveSimplifyTolerance());
         dwellSensitivityBoost.set(s.dwellSensitivityBoost());
+        dwellDownsampleOverride.set(s.dwellDownsampleOverride());
     }
 }

@@ -264,6 +264,11 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
         return drawing;
     }
 
+    /** Package-private accessor so DwellExpansionTimer can reach the viewer's server. */
+    QuPathViewer viewer() {
+        return getViewer();
+    }
+
     @Override
     protected Geometry createShape(MouseEvent e, double x, double y, boolean useTiles, Geometry addToShape) {
 
@@ -340,7 +345,12 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
 
         long startTime = System.currentTimeMillis();
 
-        double downsample = Math.max(1, Math.round(viewer.getDownsampleFactor() * 4)) / 4.0;
+        double downsample;
+        if (WizardWandParameters.hasDwellDownsampleOverride()) {
+            downsample = WizardWandParameters.getDwellDownsampleOverride();
+        } else {
+            downsample = Math.max(1, Math.round(viewer.getDownsampleFactor() * 4)) / 4.0;
+        }
 
         // --- Stage 1: Image Capture ---
         var type = WizardWandParameters.getWandType();
