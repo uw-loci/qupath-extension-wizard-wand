@@ -213,8 +213,23 @@ public class WizardWandExtension implements QuPathExtension {
     private javafx.scene.control.ContextMenu buildContextMenu() {
         var menu = new javafx.scene.control.ContextMenu();
 
-        // Sensitivity presets submenu
-        var presetsMenu = new javafx.scene.control.Menu("Sensitivity presets");
+        // Rebuild menu items each time it's shown (user presets can change)
+        menu.setOnShowing(event -> populateContextMenu(menu));
+        populateContextMenu(menu);
+
+        return menu;
+    }
+
+    /**
+     * Populate (or repopulate) the context menu with presets, tuning, and reset.
+     */
+    private void populateContextMenu(javafx.scene.control.ContextMenu menu) {
+        menu.getItems().clear();
+
+        // --- Presets submenu ---
+        var presetsMenu = new javafx.scene.control.Menu("Presets");
+
+        // Built-in presets
         for (var preset : SensitivityPreset.values()) {
             var item = new javafx.scene.control.MenuItem(
                     preset.name().charAt(0) + preset.name().substring(1).toLowerCase()
@@ -222,6 +237,57 @@ public class WizardWandExtension implements QuPathExtension {
             item.setOnAction(e -> WizardWandParameters.applyPreset(preset));
             presetsMenu.getItems().add(item);
         }
+
+        // User presets
+        var userPresets = WizardWandUserPresets.loadPresets();
+        if (!userPresets.isEmpty()) {
+            presetsMenu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
+            for (var up : userPresets) {
+                var item = new javafx.scene.control.MenuItem(up.name());
+                item.setOnAction(e -> {
+                    WizardWandUserPresets.applyPreset(up);
+                    logger.info("Applied user preset: {}", up.name());
+                });
+                presetsMenu.getItems().add(item);
+            }
+        }
+
+        presetsMenu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
+
+        // Save current as preset
+        var saveItem = new javafx.scene.control.MenuItem("Save current as preset...");
+        saveItem.setOnAction(e -> {
+            var dialog = new javafx.scene.control.TextInputDialog();
+            dialog.setTitle("Wizard Wand");
+            dialog.setHeaderText("Save current settings as a preset");
+            dialog.setContentText("Preset name:");
+            dialog.showAndWait().ifPresent(name -> {
+                if (name != null && !name.isBlank()) {
+                    var presets = WizardWandUserPresets.loadPresets();
+                    presets.add(WizardWandUserPresets.captureCurrentAsPreset(name.strip()));
+                    WizardWandUserPresets.savePresets(presets);
+                    logger.info("Saved user preset: {}", name.strip());
+                }
+            });
+        });
+        presetsMenu.getItems().add(saveItem);
+
+        // Remove preset submenu (only if user presets exist)
+        if (!userPresets.isEmpty()) {
+            var removeMenu = new javafx.scene.control.Menu("Remove preset");
+            for (var up : userPresets) {
+                var removeItem = new javafx.scene.control.MenuItem(up.name());
+                removeItem.setOnAction(e -> {
+                    var presets = WizardWandUserPresets.loadPresets();
+                    presets.removeIf(p -> p.name().equals(up.name()));
+                    WizardWandUserPresets.savePresets(presets);
+                    logger.info("Removed user preset: {}", up.name());
+                });
+                removeMenu.getItems().add(removeItem);
+            }
+            presetsMenu.getItems().add(removeMenu);
+        }
+
         menu.getItems().add(presetsMenu);
 
         menu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
@@ -233,14 +299,14 @@ public class WizardWandExtension implements QuPathExtension {
 
         menu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
 
-        // Reset preferences
+        // Reset preferences (does NOT touch user presets)
         var resetItem = new javafx.scene.control.MenuItem("Reset Wizard Wand preferences");
         resetItem.setOnAction(e -> {
             var confirm = new javafx.scene.control.Alert(
                     javafx.scene.control.Alert.AlertType.CONFIRMATION,
                     "Reset all Wizard Wand preferences to their defaults?\n\n"
-                            + "This only affects Wizard Wand settings; other QuPath "
-                            + "preferences will not be changed.",
+                            + "This only affects Wizard Wand settings; saved presets "
+                            + "will not be removed.",
                     javafx.scene.control.ButtonType.OK,
                     javafx.scene.control.ButtonType.CANCEL);
             confirm.setHeaderText("Reset Wizard Wand preferences");
@@ -254,8 +320,6 @@ public class WizardWandExtension implements QuPathExtension {
             });
         });
         menu.getItems().add(resetItem);
-
-        return menu;
     }
 
     /**
