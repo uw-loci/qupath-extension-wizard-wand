@@ -28,11 +28,12 @@ public final class WizardWandUserPresets {
     private static final Type LIST_TYPE = new TypeToken<List<UserPreset>>() {}.getType();
 
     /**
-     * A saved wand configuration. Captures all wand-behavior settings but not
-     * interaction settings (dwell, fixed downsample, enhanced handler).
+     * A saved wand configuration. Captures all persistent wand settings
+     * including dwell timing, fixed downsample, and the enhanced handler toggle.
      */
     public record UserPreset(
             String name,
+            // --- Wand behavior ---
             WizardWandType wandType,
             double sensitivity,
             double sigma,
@@ -46,7 +47,16 @@ public final class WizardWandUserPresets {
             int edgePyramidOffset,
             EdgeNormalizationMode edgeNormalizationMode,
             double simplifyTolerance,
-            double aggressiveSimplifyTolerance
+            double aggressiveSimplifyTolerance,
+            // --- Dwell timing ---
+            double dwellDelay,
+            double dwellExpansionRate,
+            double dwellMaxBoost,
+            // --- Fixed downsample ---
+            boolean fixedDownsample,
+            double fixedDownsampleLevel,
+            // --- Enhanced handler ---
+            boolean useEnhancedBrushHandler
     ) {}
 
     /** Load all user presets from the persistent preference. */
@@ -89,7 +99,13 @@ public final class WizardWandUserPresets {
                 WizardWandParameters.getEdgePyramidOffset(),
                 WizardWandParameters.getEdgeNormalizationMode(),
                 WizardWandParameters.getSimplifyTolerance(),
-                WizardWandParameters.getAggressiveSimplifyTolerance()
+                WizardWandParameters.getAggressiveSimplifyTolerance(),
+                WizardWandParameters.getDwellDelay(),
+                WizardWandParameters.getDwellExpansionRate(),
+                WizardWandParameters.getDwellMaxBoost(),
+                WizardWandParameters.getFixedDownsample(),
+                WizardWandParameters.getFixedDownsampleLevel(),
+                WizardWandParameters.getUseEnhancedBrushHandler()
         );
     }
 
@@ -109,6 +125,12 @@ public final class WizardWandUserPresets {
         WizardWandParameters.edgeNormalizationModeProperty().set(p.edgeNormalizationMode());
         WizardWandParameters.simplifyToleranceProperty().set(p.simplifyTolerance());
         WizardWandParameters.aggressiveSimplifyToleranceProperty().set(p.aggressiveSimplifyTolerance());
+        WizardWandParameters.dwellDelayProperty().set(p.dwellDelay());
+        WizardWandParameters.dwellExpansionRateProperty().set(p.dwellExpansionRate());
+        WizardWandParameters.dwellMaxBoostProperty().set(p.dwellMaxBoost());
+        WizardWandParameters.fixedDownsampleProperty().set(p.fixedDownsample());
+        WizardWandParameters.fixedDownsampleLevelProperty().set(p.fixedDownsampleLevel());
+        WizardWandParameters.useEnhancedBrushHandlerProperty().set(p.useEnhancedBrushHandler());
     }
 
     private WizardWandUserPresets() {}
