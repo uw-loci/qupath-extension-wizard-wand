@@ -92,8 +92,9 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
     // --- Drawing state ---
     private Point2D pLast = null;
     private volatile boolean drawing = false;
-    private boolean forceRefresh = false; // Set by scroll handler to bypass position check
+    private boolean forceRefresh = false; // Set by dwell timer to bypass position check
     private boolean firstUpdateOfStroke = false; // Set on mousePressed, cleared after first mask sanity log
+    private boolean shiftHeldDuringStroke = false; // Tracks if Shift was held at any point during the stroke
     private double lastDrawX, lastDrawY;
     private MouseEvent lastMouseEvent;
 
@@ -118,6 +119,7 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
         drawing = false;
         forceRefresh = false;
         firstUpdateOfStroke = false;
+        shiftHeldDuringStroke = false;
         lastMouseEvent = null;
         pLast = null;
         dwellTimer.stopDwell();
@@ -148,6 +150,7 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
         if (e.isPrimaryButtonDown() && !e.isConsumed()) {
             drawing = true;
             firstUpdateOfStroke = true;
+            shiftHeldDuringStroke = e.isShiftDown();
             var viewer = getViewer();
             if (viewer != null) {
                 var p = viewer.componentPointToImagePoint(e.getX(), e.getY(), null, false);
@@ -162,6 +165,8 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
     @Override
     public void mouseDragged(MouseEvent e) {
         if (drawing) {
+            if (e.isShiftDown())
+                shiftHeldDuringStroke = true;
             lastMouseEvent = e;
             var viewer = getViewer();
             if (viewer != null) {
@@ -182,19 +187,19 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
         lastMouseEvent = null;
         pLast = null;
 
-        // Apply final hole filling to the complete annotation before committing.
-        // This catches holes formed by union of multiple drag strokes that
-        // the per-stroke fill in createShape() cannot prevent. Skipped when
-        // Alt is held (subtract mode) so holes the user deliberately carved
-        // out aren't re-closed on release.
-        if (WizardWandParameters.getFillHoles() && !isSubtractMode(e)) {
-            var viewer = getViewer();
-            if (viewer != null) {
-                var selected = viewer.getSelectedObject();
-                if (selected != null && selected.isAnnotation() && selected.isEditable()
-                        && selected.hasROI() && selected.getROI().isArea()) {
-                    var roi = selected.getROI();
-                    var geom = roi.getGeometry();
+        // Post-stroke processing on the final accumulated annotation.
+        var viewer = getViewer();
+        if (viewer != null && !isSubtractMode(e)) {
+            var selected = viewer.getSelectedObject();
+            if (selected != null && selected.isAnnotation() && selected.isEditable()
+                    && selected.hasROI() && selected.getROI().isArea()) {
+                var roi = selected.getROI();
+                var geom = roi.getGeometry();
+                boolean changed = false;
+
+                // Hole filling: catches holes formed by union of multiple drag
+                // strokes. Skipped in subtract mode so carved holes persist.
+                if (WizardWandParameters.getFillHoles()) {
                     int minHoleSize = WizardWandParameters.getMinHoleSize();
                     Geometry filled;
                     if (minHoleSize <= 0) {
@@ -203,13 +208,40 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
                         filled = GeometryTools.removeInteriorRings(geom, minHoleSize);
                     }
                     if (filled != geom && !filled.isEmpty()) {
-                        var newRoi = GeometryTools.geometryToROI(filled, roi.getImagePlane());
-                        ((qupath.lib.objects.PathAnnotationObject) selected).setROI(newRoi);
+                        geom = filled;
+                        changed = true;
                     }
+                }
+
+                // Aggressive simplification: when Shift was held during the
+                // stroke, simplify the FINAL accumulated annotation (not just
+                // the per-stroke piece). Wand shapes from flood-fill contours
+                // have too few vertices for per-piece simplification to be
+                // visible; simplifying the accumulated union makes a real
+                // difference, especially after a multi-step drag.
+                if (shiftHeldDuringStroke) {
+                    double tolerance = WizardWandParameters.getAggressiveSimplifyTolerance();
+                    if (tolerance > 0) {
+                        try {
+                            var simplified = VWSimplifier.simplify(geom, tolerance);
+                            if (!simplified.isEmpty()) {
+                                geom = simplified;
+                                changed = true;
+                            }
+                        } catch (Exception ex) {
+                            logger.debug("Error simplifying final annotation: {}", ex.getMessage());
+                        }
+                    }
+                }
+
+                if (changed) {
+                    var newRoi = GeometryTools.geometryToROI(geom, roi.getImagePlane());
+                    ((qupath.lib.objects.PathAnnotationObject) selected).setROI(newRoi);
                 }
             }
         }
 
+        shiftHeldDuringStroke = false;
         super.mouseReleased(e);
     }
 

@@ -24,7 +24,8 @@ With default settings, the tool behaves like the built-in wand but fills holes u
 
 ## Features
 
-### Color space modes
+<details>
+<summary><strong>Color space modes</strong></summary>
 
 Controls how pixel colors are compared when growing the selection.
 
@@ -35,7 +36,10 @@ Controls how pixel colors are compared when growing the selection.
 | **LAB_DISTANCE** | Perceptual color distance. Better than RGB when similar-looking colors have different RGB values (e.g., subtle stain differences). |
 | **HSV** | Hue-saturation-value. Good when you want to select by color hue regardless of brightness (e.g., all blue nuclei even if some are darker). |
 
-### Sensitivity
+</details>
+
+<details>
+<summary><strong>Sensitivity</strong></summary>
 
 Controls how large the selection grows. Formula: `threshold = stddev x sensitivity`.
 
@@ -43,7 +47,10 @@ Controls how large the selection grows. Formula: `threshold = stddev x sensitivi
 - **Medium (0.4--0.7):** Balanced. Default is 0.5 (matches the built-in wand).
 - **High (1.0+):** Expansive. Use for quickly annotating large uniform regions.
 
-### Gaussian blur (sigma)
+</details>
+
+<details>
+<summary><strong>Gaussian blur (sigma)</strong></summary>
 
 Amount of pre-processing blur applied before the wand evaluates pixel similarity.
 
@@ -51,7 +58,10 @@ Amount of pre-processing blur applied before the wand evaluates pixel similarity
 - **Medium (3.0--5.0):** Smooths noise while keeping major boundaries. Default is 4.0.
 - **High (6.0+):** Heavy smoothing for noisy images or broad tissue regions.
 
-### Dwell expansion (hold-to-grow)
+</details>
+
+<details>
+<summary><strong>Dwell expansion (hold-to-grow)</strong></summary>
 
 Click and hold the mouse without moving to progressively expand the selection.
 
@@ -62,7 +72,10 @@ Click and hold the mouse without moving to progressively expand the selection.
 - **Dwell rate:** How fast the selection grows.
 - **Dwell max boost:** Maximum sensitivity increase (caps the expansion).
 
-### Morphological smoothing
+</details>
+
+<details>
+<summary><strong>Morphological smoothing</strong></summary>
 
 Smooths the selection boundary after the flood fill using morphological closing.
 
@@ -73,7 +86,10 @@ Smooths the selection boundary after the flood fill using morphological closing.
 
 Use odd values. Even values are rounded up.
 
-### Hole filling
+</details>
+
+<details>
+<summary><strong>Hole filling</strong></summary>
 
 Automatically fills enclosed holes within the selection at the JTS geometry level.
 
@@ -81,14 +97,20 @@ Automatically fills enclosed holes within the selection at the JTS geometry leve
 - **Min hole size:** Only fill holes smaller than this area in square pixels. Default is 10,000. Set to 0 to fill all holes regardless of size.
 - **Alt+draw (subtract mode):** Hole filling is automatically skipped when you hold Alt to erase areas, so deliberately carved holes stay open.
 
-### Connectivity
+</details>
+
+<details>
+<summary><strong>Connectivity</strong></summary>
 
 Controls which pixels are considered neighbors during flood fill.
 
 - **Strict (4-connectivity, default):** Horizontal and vertical neighbors only. More angular selections that won't leak through thin diagonal gaps. Matches the built-in wand.
 - **Relaxed (8-connectivity):** Includes diagonal neighbors. Smoother, rounder selections that fill corners better.
 
-### Edge-aware barriers
+</details>
+
+<details>
+<summary><strong>Edge-aware barriers</strong></summary>
 
 When enabled, detects intensity edges in the image and prevents the selection from crossing strong boundaries. Adds slight computational overhead.
 
@@ -96,16 +118,24 @@ When enabled, detects intensity edges in the image and prevents the selection fr
 - **Edge pyramid level (0--4, default 2):** How much fine detail the edge detector ignores. Higher values sample edges from a coarser pyramid level, making the wand less sensitive to sub-cellular texture when zoomed in. 0 = current zoom level (picks up everything); 2 = 4x coarser (tissue boundaries, not cellular noise).
 - **Edge normalization (RELATIVE / ABSOLUTE):** How the edge threshold is computed. RELATIVE (default) adapts to the content in the current window. ABSOLUTE uses a fixed scale, giving consistent barriers across scenes -- recommended when using pyramid level > 0.
 
-### Simplification
+</details>
+
+<details>
+<summary><strong>Simplification</strong></summary>
 
 Reduces the number of anchor points in the selection for better QuPath performance.
 
-- **Simplify (default 0):** Always-on simplification tolerance. 0 = off (matches built-in wand). Values 0.1--1.0 provide light-to-moderate simplification.
-- **Shift+drag:** Holding Shift while drawing applies the aggressive simplification tolerance (default 3.0) for rapid rough annotations with far fewer points.
+- **Simplify (default 0):** Always-on simplification tolerance applied to each per-stroke piece. 0 = off (matches built-in wand). Values 0.1--1.0 provide light-to-moderate simplification.
+- **Shift+drag:** Holding Shift while drawing applies aggressive simplification (default tolerance 3.0) to the **final accumulated annotation** on mouse release. This produces rapid rough annotations with visibly fewer anchor points -- useful when precision is less important than speed.
 
-### Use overlays
+</details>
+
+<details>
+<summary><strong>Use overlays</strong></summary>
 
 When enabled (default), the wand considers painted overlay pixels (e.g., from a pixel classifier) in addition to the raw image. Disable when overlays are distracting or you want to select based purely on the underlying image.
+
+</details>
 
 ---
 
@@ -128,7 +158,8 @@ Each preset sets both sensitivity and morphological smoothing together.
 
 An automated parameter search that finds wand settings matching a reference annotation you draw.
 
-### How to use
+<details>
+<summary><strong>How to use</strong></summary>
 
 1. Zoom to a representative area in the image.
 2. Switch to the **polygon** or **brush** tool and draw around what a single wand click should select. This is your ground truth.
@@ -138,7 +169,10 @@ An automated parameter search that finds wand settings matching a reference anno
 6. When finished, review the best IoU (Intersection over Union) score and chosen settings.
 7. Click **Apply** to use the winning settings, or **Cancel** to keep your original settings.
 
-### What it searches
+</details>
+
+<details>
+<summary><strong>What it searches</strong></summary>
 
 **Coarse pass (288 candidates):** all combinations of:
 - Color space: RGB, GRAY, LAB, HSV
@@ -150,19 +184,27 @@ An automated parameter search that finds wand settings matching a reference anno
 - Edge-aware on/off
 - Strict/relaxed connectivity
 
-### How it works
+</details>
+
+<details>
+<summary><strong>How it works</strong></summary>
 
 - A seed point is computed inside your ground-truth annotation using `Geometry.getInteriorPoint()` (guaranteed to lie inside even non-convex shapes).
 - For each candidate, the wand pipeline runs at that seed point and the result is scored by IoU against your ground truth.
 - Your settings are saved before the search and restored unconditionally afterward (even on cancel or error).
 - The search runs on the FX thread using the wand's own instance buffers -- it cannot run while you are mid-stroke (the dialog checks for this).
 
-### Tips
+</details>
+
+<details>
+<summary><strong>Tips</strong></summary>
 
 - Draw your ground truth at the zoom level you plan to work at -- the wand's behavior is zoom-dependent.
 - Keep the annotation within the wand's 149-pixel sampling window (about 149 x downsample image pixels at the current zoom). Larger annotations may produce lower IoU since the wand physically cannot reach beyond its window.
 - An IoU of 0.7+ is a good match; 0.85+ is excellent.
 - If no good match is found, try a simpler or smaller reference annotation.
+
+</details>
 
 ---
 
@@ -172,14 +214,15 @@ An automated parameter search that finds wand settings matching a reference anno
 |--------|--------------|-------------------|
 | Click + drag | Draw / extend selection | -- |
 | Click + hold still (300 ms) | Dwell expansion | -- |
-| **Shift** + drag | Aggressive simplification | -- |
+| **Shift** + drag | Aggressive simplification on release | -- |
 | **Alt** + click/drag | Subtract from selection (hole filling skipped) | -- |
 | **Ctrl** + click | Exact color match (zero threshold, no blur) | -- |
 | Right-click toolbar | -- | Context menu (presets, tuning, reset) |
 
 ---
 
-## All preferences
+<details>
+<summary><strong>All preferences</strong></summary>
 
 All settings are in the QuPath Preferences pane under the **Wizard Wand** category.
 
@@ -198,16 +241,17 @@ All settings are in the QuPath Preferences pane under the **Wizard Wand** catego
 | Edge pyramid level | Integer | 2 | Coarser pyramid level for edge detection (0--4) |
 | Edge normalization | Enum | RELATIVE | Edge threshold mode (RELATIVE or ABSOLUTE) |
 | Simplify | Double | 0.0 | Always-on geometry simplification tolerance |
-| Shift simplify | Double | 3.0 | Aggressive simplification when Shift held |
+| Shift simplify | Double | 3.0 | Aggressive simplification applied on release when Shift held |
 | Dwell delay (ms) | Double | 300 | Hold-still time before dwell expansion starts |
 | Dwell rate | Double | 0.5 | Speed of dwell expansion |
 | Dwell max boost | Double | 3.0 | Maximum sensitivity boost from dwell |
 | Sensitivity min | Double | 0.05 | Lower bound for effective sensitivity |
 | Sensitivity max | Double | 5.0 | Upper bound for effective sensitivity |
 
----
+</details>
 
-## How features interact
+<details>
+<summary><strong>How features interact</strong></summary>
 
 ### Sensitivity + dwell expansion
 Dwell adds a temporary boost on top of the base sensitivity. The effective value is `sensitivity + dwellBoost`, clamped to the min/max bounds. The boost resets when you start a new stroke.
@@ -224,14 +268,19 @@ Edge barriers and color-threshold barriers are independent. Edge barriers are bu
 ### Morphological smoothing + hole filling
 Smoothing runs first (on the binary mask), then hole filling runs on the extracted JTS geometry. Heavier smoothing can close small holes before the geometry stage even sees them, so the two features compound. If you need precise hole preservation, use low smoothing.
 
+### Simplify + Shift simplify
+Per-stroke simplification (`Simplify` preference) runs on each individual wand piece as it is created. Shift simplification runs on the **final accumulated annotation** when the mouse is released, which produces a much more visible reduction in vertex count. Both use Visvalingam-Whyatt. They are independent: you can use Shift simplification even if the per-stroke tolerance is 0.
+
 ### Simplify + smoothing
-Both reduce vertex count, but at different stages. Smoothing operates on the binary pixel mask (morphological closing). Simplification operates on the extracted polygon vertices (Visvalingam-Whyatt). They are complementary: smoothing gives smoother visual boundaries; simplification reduces file size and improves QuPath performance with many annotations.
+Smoothing operates on the binary pixel mask (morphological closing). Simplification operates on the extracted polygon vertices. They are complementary: smoothing gives smoother visual boundaries; simplification reduces file size and improves QuPath performance with many annotations.
 
 ### Fill holes + Alt subtract
 Alt+draw (subtract mode) deliberately cuts holes. Hole filling is automatically skipped during subtract strokes and on the final commit, so your carved holes persist. Hole filling only runs during additive drawing.
 
 ### Tune wand + current settings
 The tuner searches wandType, sensitivity, sigma, smoothing, edge-aware, and connectivity. It does NOT change: fill holes, min hole size, overlay usage, simplification, dwell settings, edge strength, edge pyramid level, or edge normalization. Those are held at whatever you currently have set and the tuner optimizes around them.
+
+</details>
 
 ---
 
@@ -247,4 +296,4 @@ The JAR is written to `build/libs/qupath-extension-wizard-wand-X.Y.Z-all.jar`.
 
 ## License
 
-See [LICENSE](LICENSE).
+[Apache License 2.0](LICENSE)
