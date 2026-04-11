@@ -189,36 +189,43 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
 
         // Post-stroke processing on the final accumulated annotation.
         var viewer = getViewer();
-        if (viewer != null && !isSubtractMode(e)) {
+        if (viewer != null) {
             var selected = viewer.getSelectedObject();
             if (selected != null && selected.isAnnotation() && selected.isEditable()
                     && selected.hasROI() && selected.getROI().isArea()) {
                 var roi = selected.getROI();
                 var geom = roi.getGeometry();
                 boolean changed = false;
+                boolean subtract = isSubtractMode(e);
 
-                // Hole filling: catches holes formed by union of multiple drag
-                // strokes. Skipped in subtract mode so carved holes persist.
                 if (WizardWandParameters.getFillHoles()) {
-                    int minHoleSize = WizardWandParameters.getMinHoleSize();
-                    Geometry filled;
-                    if (minHoleSize <= 0) {
-                        filled = GeometryTools.fillHoles(geom);
-                    } else {
-                        filled = GeometryTools.removeInteriorRings(geom, minHoleSize);
-                    }
-                    if (filled != geom && !filled.isEmpty()) {
-                        geom = filled;
+                    int minSize = WizardWandParameters.getMinHoleSize();
+                    if (subtract) {
+                        // Subtract mode: remove small islands (disconnected
+                        // fragments) left behind after erasing. This is the
+                        // dual of hole filling -- holes are small voids inside
+                        // a region; islands are small pieces outside the main
+                        // region after a chunk was removed.
+                        geom = removeSmallIslands(geom, minSize);
                         changed = true;
+                    } else {
+                        // Add mode: fill small holes formed by union of
+                        // multiple drag strokes.
+                        Geometry filled;
+                        if (minSize <= 0) {
+                            filled = GeometryTools.fillHoles(geom);
+                        } else {
+                            filled = GeometryTools.removeInteriorRings(geom, minSize);
+                        }
+                        if (filled != geom && !filled.isEmpty()) {
+                            geom = filled;
+                            changed = true;
+                        }
                     }
                 }
 
                 // Aggressive simplification: when Shift was held during the
-                // stroke, simplify the FINAL accumulated annotation (not just
-                // the per-stroke piece). Wand shapes from flood-fill contours
-                // have too few vertices for per-piece simplification to be
-                // visible; simplifying the accumulated union makes a real
-                // difference, especially after a multi-step drag.
+                // stroke, simplify the FINAL accumulated annotation.
                 if (shiftHeldDuringStroke) {
                     double tolerance = WizardWandParameters.getAggressiveSimplifyTolerance();
                     if (tolerance > 0) {
@@ -511,6 +518,44 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
      * they did not reliably honor the Mat's row stride. The indexer owns that
      * stride accounting.
      */
+    /**
+     * Remove disconnected polygon fragments smaller than {@code minArea}
+     * square pixels from a geometry. If the geometry is a single Polygon
+     * it is returned unchanged (we never delete the entire annotation).
+     * If minArea is 0 or negative, all islands are removed and only the
+     * largest polygon is kept.
+     */
+    private static Geometry removeSmallIslands(Geometry geom, int minArea) {
+        int n = geom.getNumGeometries();
+        if (n <= 1)
+            return geom;
+
+        // Collect polygons that are large enough to keep
+        List<Geometry> kept = new ArrayList<>();
+        double largestArea = 0;
+        int largestIdx = 0;
+        for (int i = 0; i < n; i++) {
+            Geometry part = geom.getGeometryN(i);
+            double area = part.getArea();
+            if (area > largestArea) {
+                largestArea = area;
+                largestIdx = i;
+            }
+            if (minArea <= 0 || area >= minArea) {
+                kept.add(part);
+            }
+        }
+        // Always keep at least the largest piece
+        if (kept.isEmpty()) {
+            kept.add(geom.getGeometryN(largestIdx));
+        }
+        if (kept.size() == n)
+            return geom; // nothing removed
+        if (kept.size() == 1)
+            return kept.getFirst();
+        return geom.getFactory().buildGeometry(kept);
+    }
+
     private void writeDiskMask(int radius) {
         int width = W + 2;            // 151
         int cx = W / 2 + 1;            // disk center matches seed in mask coords
