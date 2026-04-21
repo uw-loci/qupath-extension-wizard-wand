@@ -37,6 +37,13 @@ public class WizardWandParameters {
     private static final BooleanProperty strictConnectivity =
             PathPrefs.createPersistentPreference("wizardWandStrictConnectivityV2", true);
 
+    // When true, trace the flood-fill mask along pixel edges so the annotation
+    // matches the pixel grid exactly (axis-aligned segments, no diagonals).
+    // Mirrors QuPath core PR #2125's switch from findContours to ContourTracing.
+    // Simplification is force-skipped while this is enabled.
+    private static final BooleanProperty pixelExactContours =
+            PathPrefs.createPersistentPreference("wizardWandPixelExactContours", false);
+
     private static final IntegerProperty morphKernelSize =
             PathPrefs.createPersistentPreference("wizardWandMorphKernelSize", 5);
 
@@ -131,6 +138,10 @@ public class WizardWandParameters {
     /** Returns 4 for strict connectivity, 8 for relaxed (default). */
     public static int getConnectivity() { return strictConnectivity.get() ? 4 : 8; }
 
+    public static BooleanProperty pixelExactContoursProperty() { return pixelExactContours; }
+    public static boolean getPixelExactContours() { return pixelExactContours.get(); }
+    public static void setPixelExactContours(boolean value) { pixelExactContours.set(value); }
+
     public static IntegerProperty morphKernelSizeProperty() { return morphKernelSize; }
     public static int getMorphKernelSize() { return morphKernelSize.get(); }
     public static void setMorphKernelSize(int value) { morphKernelSize.set(value); }
@@ -221,6 +232,7 @@ public class WizardWandParameters {
         sigma.set(4.0);
         useOverlays.set(true);
         strictConnectivity.set(true);
+        pixelExactContours.set(false);
         morphKernelSize.set(5);
         fillHoles.set(true);
         minHoleSize.set(10000);

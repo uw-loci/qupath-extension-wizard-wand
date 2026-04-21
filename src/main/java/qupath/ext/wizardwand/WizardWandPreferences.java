@@ -94,6 +94,22 @@ public class WizardWandPreferences {
                         + "the blur and morphological closing smooth away the small boundary differences.")
                 .build());
 
+        items.add(new PropertyItemBuilder<>(WizardWandParameters.pixelExactContoursProperty(), Boolean.class)
+                .name("Pixel-exact contours (no diagonals)")
+                .category(CATEGORY)
+                .description("When checked, traces the selection along pixel edges instead of pixel "
+                        + "centers, so the annotation boundary is strictly axis-aligned and matches "
+                        + "the pixel grid exactly. Mirrors QuPath core PR #2125 for the built-in wand.\n\n"
+                        + "Use when you need annotations that cover exact pixels -- e.g. when the "
+                        + "annotation will later be used as a pixel mask, or when you are annotating "
+                        + "at a zoom level where individual pixels are visible and diagonal "
+                        + "corner-connections look wrong.\n\n"
+                        + "While this option is on, the 'Simplify' and 'Shift simplify' tolerances "
+                        + "are both ignored (any non-zero tolerance would smooth corners back into "
+                        + "diagonals). Morphological 'Smoothing' still affects the mask before "
+                        + "tracing -- set Smoothing to 0 for the rawest pixel boundary.")
+                .build());
+
         items.add(new PropertyItemBuilder<>(WizardWandParameters.morphKernelSizeProperty(), Integer.class)
                 .name("Smoothing")
                 .category(CATEGORY)

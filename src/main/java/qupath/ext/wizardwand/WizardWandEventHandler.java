@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javafx.scene.input.MouseEvent;
+import qupath.lib.analysis.images.ContourTracing;
 import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.gui.viewer.overlays.HierarchyOverlay;
 import qupath.lib.gui.viewer.overlays.PathOverlay;
@@ -41,6 +42,7 @@ import qupath.lib.gui.viewer.tools.QuPathPenManager;
 import qupath.lib.gui.viewer.tools.handlers.BrushToolEventHandler;
 import qupath.lib.regions.ImageRegion;
 import qupath.lib.roi.GeometryTools;
+import qupath.opencv.tools.OpenCVTools;
 
 /**
  * Core event handler for the Wizard Wand tool.
@@ -237,7 +239,8 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
 
                 // Aggressive simplification: when Shift was held during the
                 // stroke, simplify the FINAL accumulated annotation.
-                if (shiftHeldDuringStroke) {
+                // Skipped in pixel-exact mode to preserve axis-aligned corners.
+                if (shiftHeldDuringStroke && !WizardWandParameters.getPixelExactContours()) {
                     double tolerance = WizardWandParameters.getAggressiveSimplifyTolerance();
                     if (tolerance > 0) {
                         try {
@@ -553,14 +556,18 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
         }
 
         // --- Live Simplification ---
-        double tolerance = shiftDown
-                ? WizardWandParameters.getAggressiveSimplifyTolerance()
-                : WizardWandParameters.getSimplifyTolerance();
-        if (tolerance > 0) {
-            try {
-                geometry = VWSimplifier.simplify(geometry, tolerance);
-            } catch (Exception ex) {
-                logger.debug("Error simplifying geometry: {}", ex.getMessage());
+        // Skipped when pixel-exact contours are enabled: any non-zero tolerance
+        // smooths axis-aligned corners back into diagonals, defeating the mode.
+        if (!WizardWandParameters.getPixelExactContours()) {
+            double tolerance = shiftDown
+                    ? WizardWandParameters.getAggressiveSimplifyTolerance()
+                    : WizardWandParameters.getSimplifyTolerance();
+            if (tolerance > 0) {
+                try {
+                    geometry = VWSimplifier.simplify(geometry, tolerance);
+                } catch (Exception ex) {
+                    logger.debug("Error simplifying geometry: {}", ex.getMessage());
+                }
             }
         }
 
@@ -953,6 +960,9 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
      * Stage 8: Extract contours from the mask and convert to JTS Geometry.
      */
     private Geometry extractContours(GeometryFactory factory) {
+        if (WizardWandParameters.getPixelExactContours()) {
+            return extractContoursPixelExact();
+        }
         MatVector contours = new MatVector();
         if (contourHierarchy == null)
             contourHierarchy = new Mat();
@@ -1011,6 +1021,43 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
                 ? geometries.getFirst()
                 : GeometryCombiner.combine(geometries);
         geometry = geometry.buffer(0.5);
+
+        return geometry;
+    }
+
+    /**
+     * Pixel-exact contour extraction. Walks the matMask along pixel edges via
+     * {@link ContourTracing#createTracedGeometry} so the returned polygon has
+     * strictly horizontal/vertical segments and matches the pixel grid exactly
+     * -- no diagonal corner-connections between pixels.
+     * <p>
+     * Mirrors the change made to QuPath's core wand in PR
+     * <a href="https://github.com/qupath/qupath/pull/2125">#2125</a>.
+     * <p>
+     * matMask is 0/1 after the flood-fill + saturating subtract (CV_8UC1), so
+     * we trace pixels with value >= 0.5. The mask is (W+2) x (W+2) with the
+     * seed pixel at mask coords (W/2+1, W/2+1); we shift that pixel's center
+     * to the local origin (0, 0) so downstream Stage 9 scale+translate places
+     * the seed at the clicked image position. ContourTracing returns polygons
+     * on pixel-edge coordinates, so no buffer(0.5) is applied here.
+     */
+    private Geometry extractContoursPixelExact() {
+        var simpleImage = OpenCVTools.matToSimpleImage(matMask, 0);
+        var geometry = ContourTracing.createTracedGeometry(simpleImage, 0.5, 255, null);
+        if (geometry == null || geometry.isEmpty())
+            return null;
+
+        double shift = -((double) (W / 2 + 1)) - 0.5;
+        var translate = AffineTransformation.translationInstance(shift, shift);
+        geometry = translate.transform(geometry);
+
+        if (firstUpdateOfStroke) {
+            var env = geometry.getEnvelopeInternal();
+            logger.debug("WizardWand[pixelExact] geomType={} numGeoms={} envelope=[{},{} {}x{}]",
+                    geometry.getGeometryType(), geometry.getNumGeometries(),
+                    String.format("%.1f", env.getMinX()), String.format("%.1f", env.getMinY()),
+                    String.format("%.1f", env.getWidth()), String.format("%.1f", env.getHeight()));
+        }
 
         return geometry;
     }
