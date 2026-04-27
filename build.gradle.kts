@@ -7,7 +7,7 @@ plugins {
 qupathExtension {
     name = "qupath-extension-wizard-wand"
     group = "io.github.uw-loci"
-    version = "0.4.2"
+    version = "0.4.3"
     description = "Enhanced wand tool with dwell expansion, live smoothing, edge-aware selection, and more."
     automaticModule = "io.github.uw-loci.extension.wizardwand"
 }

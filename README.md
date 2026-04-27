@@ -2,12 +2,27 @@
 
 An enhanced wand tool for [QuPath](https://qupath.github.io/) that adds dwell expansion, edge-aware barriers, automatic hole filling, multiple color spaces, parameter tuning from a ground-truth annotation, and more. The built-in wand is left untouched -- this is a separate, opt-in tool that appears alongside it in the toolbar.
 
-**Requires QuPath 0.6.0-rc4 or later.**
+**Requires QuPath 0.6.0 or later.**
 
 ## Installation
 
+The fastest way is via the LOCI extension catalog -- you'll get future updates automatically.
+
+**Option 1: extension catalog (recommended)**
+
+1. In QuPath: `Extensions > Manage extensions > Manage extension catalogs > Add`.
+2. Paste `https://github.com/uw-loci/qupath-catalog-mikenelson` and click **OK**.
+3. Find **Wizard Wand** in the catalog and install. Restart QuPath.
+
+**Option 2: drag-and-drop**
+
 1. Download `qupath-extension-wizard-wand-X.Y.Z-all.jar` from the [Releases](https://github.com/uw-loci/qupath-extension-wizard-wand/releases) page.
-2. Drop it into your QuPath extensions directory (`Extensions > Installed extensions > Open extensions directory`).
+2. Drag the JAR onto a running QuPath window. QuPath will offer to copy it into your extensions folder; accept and restart.
+
+**Option 3: manual**
+
+1. Download the JAR as above.
+2. Place it in your QuPath extensions directory (`Extensions > Installed extensions > Open extensions directory`).
 3. Restart QuPath.
 
 The Wizard Wand appears in the toolbar with a sparkle-wand icon and responds to **Shift+W**.
@@ -165,7 +180,7 @@ An automated parameter search that finds wand settings matching a reference anno
 2. Switch to the **polygon** or **brush** tool and draw around what a single wand click should select. This is your ground truth.
 3. Leave that annotation selected.
 4. Right-click the Wizard Wand toolbar button and choose **Tune wand from selection...**
-5. A dialog appears with a progress bar. The search evaluates ~528 parameter combinations.
+5. A dialog appears with a progress bar. The search evaluates 528 parameter combinations (288 in the coarse pass plus 240 in the fine pass).
 6. When finished, review the best IoU (Intersection over Union) score and chosen settings.
 7. Click **Apply** to use the winning settings, or **Cancel** to keep your original settings.
 
@@ -200,7 +215,7 @@ An automated parameter search that finds wand settings matching a reference anno
 <summary><strong>Tips</strong></summary>
 
 - Draw your ground truth at the zoom level you plan to work at -- the wand's behavior is zoom-dependent.
-- Keep the annotation within the wand's 149-pixel sampling window (about 149 x downsample image pixels at the current zoom). Larger annotations may produce lower IoU since the wand physically cannot reach beyond its window.
+- The wand only sees a 149-pixel window (in screen pixels at the current zoom). Annotations larger than this window will produce lower IoU because the wand physically cannot reach beyond it -- zoom in or draw a smaller ground truth.
 - An IoU of 0.7+ is a good match; 0.85+ is excellent.
 - If no good match is found, try a simpler or smaller reference annotation.
 
@@ -210,14 +225,14 @@ An automated parameter search that finds wand settings matching a reference anno
 
 ## Modifier keys
 
-| Action | While drawing | While not drawing |
-|--------|--------------|-------------------|
-| Click + drag | Draw / extend selection | -- |
-| Click + hold still (300 ms) | Dwell expansion | -- |
-| **Shift** + drag | Aggressive simplification on release | -- |
-| **Alt** + click/drag | Subtract from selection (hole filling skipped) | -- |
-| **Ctrl** + click | Exact color match (zero threshold, no blur) | -- |
-| Right-click toolbar | -- | Context menu (presets, tuning, reset) |
+| Input | Effect |
+|---|---|
+| Click + drag | Draw / extend selection |
+| Click + hold still (300 ms) | Dwell expansion -- selection grows while you wait |
+| **Shift** + drag | Aggressive simplification applied on mouse release |
+| **Alt** + click/drag | Subtract from selection (hole filling skipped) |
+| **Ctrl** + click | Exact color match (zero threshold, no blur) |
+| Right-click toolbar button | Context menu: presets, tuning, reset |
 
 ---
 
