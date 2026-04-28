@@ -1,6 +1,6 @@
 # Wizard Wand for QuPath
 
-An enhanced wand tool for [QuPath](https://qupath.github.io/) that adds dwell expansion, edge-aware barriers, automatic hole filling, multiple color spaces, parameter tuning from a ground-truth annotation, and more. The built-in wand is left untouched -- this is a separate, opt-in tool that appears alongside it in the toolbar.
+A faster, more forgiving wand for [QuPath](https://qupath.github.io/). Click and drag like the built-in wand, or hold still to let the selection grow on its own. Selections come out smoother, holes get filled automatically, and you can have the tool teach itself the right settings from one example annotation you draw. The built-in wand is left untouched -- Wizard Wand installs as a separate toolbar button you can ignore until you want it.
 
 **Requires QuPath 0.6.0 or later.**
 
@@ -33,7 +33,7 @@ The Wizard Wand appears in the toolbar with a sparkle-wand icon and responds to 
 2. Click and drag on the image to select a region.
 3. Right-click the toolbar button for presets, auto-tuning, and reset.
 
-With default settings, the tool behaves like the built-in wand but fills holes up to 10,000 px automatically. Everything else is opt-in via Preferences.
+Out of the box it works like the built-in wand, with two upgrades on by default: small holes inside the selection get filled automatically (up to 10,000 px), and the boundary is lightly smoothed. Every other feature (hold-to-grow, edge stops, auto-tuning, simplification) is off until you turn it on in Preferences.
 
 ---
 
@@ -42,7 +42,7 @@ With default settings, the tool behaves like the built-in wand but fills holes u
 <details>
 <summary><strong>Color space modes</strong></summary>
 
-Controls how pixel colors are compared when growing the selection.
+Pick how the wand decides "this is the same color as where I clicked." RGB is the safe default; the others help on grayscale, on subtle stain differences, or when you care about hue more than brightness.
 
 | Mode | When to use |
 |------|-------------|
@@ -56,7 +56,7 @@ Controls how pixel colors are compared when growing the selection.
 <details>
 <summary><strong>Sensitivity</strong></summary>
 
-Controls how large the selection grows. Formula: `threshold = stddev x sensitivity`.
+How greedy the wand is. Lower values stay tight against obvious edges; higher values gobble up bigger uniform regions in one click. (Internally: `threshold = stddev x sensitivity`.)
 
 - **Low (0.1--0.3):** Tight, precise selections for well-defined boundaries.
 - **Medium (0.4--0.7):** Balanced. Default is 0.5 (matches the built-in wand).
@@ -67,7 +67,7 @@ Controls how large the selection grows. Formula: `threshold = stddev x sensitivi
 <details>
 <summary><strong>Gaussian blur (sigma)</strong></summary>
 
-Amount of pre-processing blur applied before the wand evaluates pixel similarity.
+How much the wand softens the image before deciding what to select. More blur means it ignores fine speckle and grabs whole regions; less blur means it follows tiny edges (and tiny noise).
 
 - **Low (0.5--2.0):** Preserves fine detail; selection follows individual pixel edges. Can be noisy.
 - **Medium (3.0--5.0):** Smooths noise while keeping major boundaries. Default is 4.0.
@@ -78,7 +78,7 @@ Amount of pre-processing blur applied before the wand evaluates pixel similarity
 <details>
 <summary><strong>Dwell expansion (hold-to-grow)</strong></summary>
 
-Click and hold the mouse without moving to progressively expand the selection.
+Click, then just hold still -- the selection keeps growing on its own until you release or move the mouse. Lets you ease into the right size instead of guessing the sensitivity up front.
 
 - After a configurable delay (default 300 ms), the selection begins growing.
 - Growth follows a logarithmic (decelerating) curve: fast at first, then slowing.
@@ -92,7 +92,7 @@ Click and hold the mouse without moving to progressively expand the selection.
 <details>
 <summary><strong>Morphological smoothing</strong></summary>
 
-Smooths the selection boundary after the flood fill using morphological closing.
+Cleans up the jagged stair-step look that pixel-by-pixel selections normally have. Higher values give rounder, simpler outlines; 0 leaves the raw boundary alone. (Morphological closing on the binary mask.)
 
 - **0:** No smoothing -- raw flood-fill boundary (can look jagged).
 - **3--5:** Light smoothing. Default is 5.
@@ -106,7 +106,7 @@ Use odd values. Even values are rounded up.
 <details>
 <summary><strong>Hole filling</strong></summary>
 
-Automatically fills enclosed holes within the selection at the JTS geometry level.
+Closes up small gaps left inside the selection so you don't have to chase them by hand. You can set a maximum hole size to fill, or skip filling on a stroke by holding Alt.
 
 - **Fill holes:** Toggle on/off. Default is on.
 - **Min hole size:** Only fill holes smaller than this area in square pixels. Default is 10,000. Set to 0 to fill all holes regardless of size.
@@ -117,7 +117,7 @@ Automatically fills enclosed holes within the selection at the JTS geometry leve
 <details>
 <summary><strong>Connectivity</strong></summary>
 
-Controls which pixels are considered neighbors during flood fill.
+Decides whether the selection can squeeze through diagonal one-pixel gaps. Strict (default) keeps it from leaking through hairline cracks; relaxed gives smoother, rounder outlines but can spill into neighbors.
 
 - **Strict (4-connectivity, default):** Horizontal and vertical neighbors only. More angular selections that won't leak through thin diagonal gaps. Matches the built-in wand.
 - **Relaxed (8-connectivity):** Includes diagonal neighbors. Smoother, rounder selections that fill corners better.
@@ -127,7 +127,7 @@ Controls which pixels are considered neighbors during flood fill.
 <details>
 <summary><strong>Edge-aware barriers</strong></summary>
 
-When enabled, detects intensity edges in the image and prevents the selection from crossing strong boundaries. Adds slight computational overhead.
+Finds the strong outlines in the image and treats them as walls the selection cannot cross -- useful when sensitivity alone keeps leaking into the next cell or the background. Slightly slower; off by default.
 
 - **Edge strength (0.0--1.0):** Controls how many edges act as barriers. Low values = only strongest edges; high values = even weak edges block.
 - **Edge pyramid level (0--4, default 2):** How much fine detail the edge detector ignores. Higher values sample edges from a coarser pyramid level, making the wand less sensitive to sub-cellular texture when zoomed in. 0 = current zoom level (picks up everything); 2 = 4x coarser (tissue boundaries, not cellular noise).
@@ -138,7 +138,7 @@ When enabled, detects intensity edges in the image and prevents the selection fr
 <details>
 <summary><strong>Simplification</strong></summary>
 
-Reduces the number of anchor points in the selection for better QuPath performance.
+Trims redundant points off the selection outline so QuPath stays responsive when you have lots of annotations. Hold Shift while drawing for a much heavier trim applied on release -- great for fast, rough outlines.
 
 - **Simplify (default 0):** Always-on simplification tolerance applied to each per-stroke piece. 0 = off (matches built-in wand). Values 0.1--1.0 provide light-to-moderate simplification.
 - **Shift+drag:** Holding Shift while drawing applies aggressive simplification (default tolerance 3.0) to the **final accumulated annotation** on mouse release. This produces rapid rough annotations with visibly fewer anchor points -- useful when precision is less important than speed.
@@ -148,7 +148,7 @@ Reduces the number of anchor points in the selection for better QuPath performan
 <details>
 <summary><strong>Use overlays</strong></summary>
 
-When enabled (default), the wand considers painted overlay pixels (e.g., from a pixel classifier) in addition to the raw image. Disable when overlays are distracting or you want to select based purely on the underlying image.
+If you have a pixel classifier or other overlay showing on top of the image, the wand will pay attention to those colors too. Turn this off when you want it to ignore the overlay and select only from the underlying image.
 
 </details>
 
@@ -308,6 +308,10 @@ cd qupath-extension-wizard-wand
 ```
 
 The JAR is written to `build/libs/qupath-extension-wizard-wand-X.Y.Z-all.jar`.
+
+## Support
+
+For general support and feature requests, please post on the [image.sc forum](https://forum.image.sc/) with the `#qupath` tag and mention `@Mike_Nelson` to flag the topic for my attention.
 
 ## License
 
