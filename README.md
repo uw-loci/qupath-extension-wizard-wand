@@ -315,4 +315,8 @@ For general support and feature requests, please post on the [image.sc forum](ht
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[GNU General Public License v3.0](LICENSE)
+
+This extension is derived from QuPath, which is available under the GPL v3. It subclasses
+QuPath's `BrushToolEventHandler` and re-implements the built-in wand tool (cf. QuPath core
+PR #2125), so it is a derivative work and is therefore also licensed under the GPL v3.
