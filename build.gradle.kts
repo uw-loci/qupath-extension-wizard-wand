@@ -26,6 +26,10 @@ dependencies {
 
     testImplementation(libs.bundles.qupath)
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.1")
+    // Required from Gradle 9: the launcher is no longer added to the test
+    // runtime classpath automatically, and its absence reports as
+    // "Failed to load JUnit Platform" rather than a missing dependency.
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation(libs.bundles.logging)
     testImplementation(libs.qupath.fxtras)
     testImplementation("org.openjfx:javafx-base:$javafxVersion")
