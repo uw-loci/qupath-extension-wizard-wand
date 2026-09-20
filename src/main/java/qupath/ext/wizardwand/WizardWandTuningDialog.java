@@ -43,14 +43,14 @@ public final class WizardWandTuningDialog {
 
         var selected = viewer.getSelectedObject();
         if (selected == null || !selected.hasROI() || !selected.getROI().isArea()) {
-            Dialogs.showErrorMessage("Wizard Wand",
+            Dialogs.showErrorMessage("Wizard Wand - Error",
                     "Select an annotation with an area ROI to use as ground truth.");
             return;
         }
 
         var handler = WizardWandExtension.getSharedEventHandler();
         if (handler == null) {
-            Dialogs.showErrorMessage("Wizard Wand", "Wizard Wand tool is not initialized.");
+            Dialogs.showErrorMessage("Wizard Wand - Error", "Wizard Wand tool is not initialized.");
             return;
         }
         if (handler.isBusyDrawing()) {
