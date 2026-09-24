@@ -261,6 +261,7 @@ public class WizardWandExtension implements QuPathExtension {
             dialog.setTitle("Wizard Wand - Save Preset");
             dialog.setHeaderText("Save current settings as a preset");
             dialog.setContentText("Preset name:");
+            DialogOwner.own(dialog);
             dialog.showAndWait().ifPresent(name -> {
                 if (name != null && !name.isBlank()) {
                     var presets = WizardWandUserPresets.loadPresets();
@@ -312,6 +313,7 @@ public class WizardWandExtension implements QuPathExtension {
             confirm.setHeaderText("Reset Wizard Wand preferences");
             confirm.setTitle("Wizard Wand - Reset Preferences");
             confirm.getDialogPane().setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+            DialogOwner.own(confirm);
             confirm.showAndWait().ifPresent(result -> {
                 if (result == javafx.scene.control.ButtonType.OK) {
                     WizardWandParameters.resetDefaults();
