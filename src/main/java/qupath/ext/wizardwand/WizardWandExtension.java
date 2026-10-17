@@ -126,7 +126,8 @@ public class WizardWandExtension implements QuPathExtension {
                 () -> qupath.lib.gui.tools.ColorToolsFX.getCachedColor(
                         qupath.lib.gui.prefs.PathPrefs.colorDefaultObjectsProperty().get()),
                 qupath.lib.gui.prefs.PathPrefs.colorDefaultObjectsProperty()));
-        return glyph;
+        // The toolbar shows a duplicate; a plain Glyph duplicate drops the color binding.
+        return qupath.lib.gui.tools.GuiTools.ensureDuplicatableGlyph(glyph);
     }
 
     /**
