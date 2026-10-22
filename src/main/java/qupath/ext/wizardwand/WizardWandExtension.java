@@ -12,6 +12,7 @@ import org.controlsfx.glyphfont.FontAwesome;
 import org.controlsfx.glyphfont.GlyphFontRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.wizardwand.ui.ContextMenuIndicator;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
@@ -152,7 +153,9 @@ public class WizardWandExtension implements QuPathExtension {
 
         var button = findWizardWandButton(toolBar);
         if (button != null) {
-            button.setContextMenu(buildContextMenu());
+            var menu = buildContextMenu();
+            button.setContextMenu(menu);
+            ContextMenuIndicator.install(button, (x, y) -> menu.show(button, x, y));
             logger.info("Wizard Wand context menu attached to toolbar button");
             return;
         }

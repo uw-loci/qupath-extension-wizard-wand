@@ -31,7 +31,7 @@ The Wizard Wand appears in the toolbar with a sparkle-wand icon and responds to 
 
 1. Press **Shift+W** (or click the sparkle-wand toolbar button).
 2. Click and drag on the image to select a region.
-3. Right-click the toolbar button for presets, auto-tuning, and reset.
+3. Right-click the toolbar button for presets, auto-tuning, and reset. The small triangle in the button's corner marks that menu.
 
 Out of the box it works like the built-in wand, with two upgrades on by default: small holes inside the selection get filled automatically (up to 10,000 px), and the boundary is lightly smoothed. Every other feature (hold-to-grow, edge stops, auto-tuning, simplification) is off until you turn it on in Preferences.
 
@@ -156,7 +156,7 @@ If you have a pixel classifier or other overlay showing on top of the image, the
 
 ## Sensitivity presets
 
-Right-click the toolbar button and choose **Sensitivity presets** for quick bundled settings:
+Right-click the toolbar button and choose **Presets** for quick bundled settings:
 
 | Preset | Sensitivity | Smoothing | Use case |
 |--------|-------------|-----------|----------|
