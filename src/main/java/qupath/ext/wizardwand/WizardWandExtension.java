@@ -1,5 +1,6 @@
 package qupath.ext.wizardwand;
 
+import java.util.Locale;
 import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.input.KeyCode;
@@ -236,7 +237,7 @@ public class WizardWandExtension implements QuPathExtension {
         // Built-in presets
         for (var preset : SensitivityPreset.values()) {
             var item = new javafx.scene.control.MenuItem(
-                    preset.name().charAt(0) + preset.name().substring(1).toLowerCase()
+                    preset.name().charAt(0) + preset.name().substring(1).toLowerCase(Locale.ROOT)
                             + String.format(" (sensitivity %.2f)", preset.getSensitivity()));
             item.setOnAction(e -> WizardWandParameters.applyPreset(preset));
             presetsMenu.getItems().add(item);
