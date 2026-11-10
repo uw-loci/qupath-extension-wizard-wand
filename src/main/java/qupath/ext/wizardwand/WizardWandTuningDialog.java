@@ -95,7 +95,7 @@ public final class WizardWandTuningDialog {
         // Cancel handler
         dialog.setOnCloseRequest(event -> {
             if (resultHolder[0] == null) {
-                // Search still running — set cancel flag
+                // Search still running -- set cancel flag
                 cancelled[0] = true;
             }
         });

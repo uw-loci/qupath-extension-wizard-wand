@@ -384,7 +384,7 @@ public class WizardWandEventHandler extends BrushToolEventHandler {
      * It is called by both the interactive drag path ({@link #createShape})
      * and the headless tuner ({@link WizardWandTuner}). It reads current
      * parameter values from {@link WizardWandParameters} and reuses the
-     * instance-level OpenCV buffers — callers must ensure single-threaded
+     * instance-level OpenCV buffers -- callers must ensure single-threaded
      * access (the tuner checks {@link #isBusyDrawing()} before calling).
      *
      * @param viewer            the active viewer (for image capture and server bounds)
